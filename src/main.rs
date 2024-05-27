@@ -1,42 +1,56 @@
-use std::io::{self, stdout};
+mod app;
+mod file_explorer;
+mod legend;
+mod navigation;
+mod text_editor;
 
+use app::App;
 use crossterm::{
-    event::{self, Event, KeyCode},
+    event::{self, KeyEventKind},
+    execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-    ExecutableCommand,
 };
-use ratatui::{prelude::*, widgets::*};
+use ratatui::backend::CrosstermBackend;
+use ratatui::Terminal;
+use std::io;
 
-fn main() -> io::Result<()> {
+fn init() -> Result<Terminal<CrosstermBackend<io::Stdout>>, io::Error> {
     enable_raw_mode()?;
-    stdout().execute(EnterAlternateScreen)?;
-    let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen)?;
+    let backend = CrosstermBackend::new(stdout);
+    let terminal = Terminal::new(backend)?;
 
-    let mut should_quit = false;
-    while !should_quit {
-        terminal.draw(ui)?;
-        should_quit = handle_events()?;
-    }
+    Ok(terminal)
+}
 
+fn exit(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<(), io::Error> {
     disable_raw_mode()?;
-    stdout().execute(LeaveAlternateScreen)?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    terminal.show_cursor()?;
     Ok(())
 }
 
-fn handle_events() -> io::Result<bool> {
-    if event::poll(std::time::Duration::from_millis(50))? {
-        if let Event::Key(key) = event::read()? {
-            if key.kind == event::KeyEventKind::Press && key.code == KeyCode::Char('q') {
-                return Ok(true);
+fn main() -> Result<(), io::Error> {
+    let mut terminal = init().unwrap();
+
+    let mut app = App::new();
+
+    loop {
+        let _ = terminal.draw(|f| app.draw(f));
+
+        if event::poll(std::time::Duration::from_millis(16))? {
+            if let event::Event::Key(key) = event::read()? {
+                if key.kind == KeyEventKind::Press {
+                    app.handle_input(key.code);
+                }
             }
         }
-    }
-    Ok(false)
-}
 
-fn ui(frame: &mut Frame) {
-    frame.render_widget(
-        Paragraph::new("Hello World!").block(Block::bordered().title("Greeting")),
-        frame.size(),
-    );
+        if app.should_stop {
+            break;
+        }
+    }
+
+    exit(&mut terminal)
 }
