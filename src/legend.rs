@@ -2,52 +2,66 @@ use crossterm::event::KeyCode;
 use ratatui::{
     layout::Rect,
     style::{Style, Stylize},
-    text::{Line, Span},
+    text::Line,
     widgets::{Block, Paragraph},
     Frame,
 };
 
 use crate::{
     binding::{get_bindings, Binding},
-    command::{get_commands, Command},
+    command::{Command, CommandHandler},
+    window::Drawable,
 };
 
-pub struct Legend {}
+pub struct Legend {
+    command_bindings_string: String,
+}
 
-struct CommandBinding<'a> {
-    command: &'a Command,
+struct CommandBinding<'a, T> {
+    command: &'a Command<T>,
     binding: &'a Binding,
 }
 
 impl Legend {
-    pub fn draw(&mut self, f: &mut Frame, area: Rect) {
-        let bindings = get_bindings();
-        let commands = get_commands();
+    pub fn new() -> Self {
+        Legend {
+            command_bindings_string: String::new(),
+        }
+    }
 
-        let command_bindings: Vec<CommandBinding> = bindings
+    pub fn update_command_bindings<T: CommandHandler>(&mut self, handler: &T) {
+        let bindings = get_bindings();
+        let commands = handler.get_commands();
+
+        let command_bindings: Vec<CommandBinding<T>> = commands
             .iter()
-            .map(|binding| {
-                let command = commands
+            .map(|command| {
+                let binding = bindings
                     .iter()
-                    .find(|c| c.id == binding.command_id)
+                    .find(|binding| binding.command_id == command.id)
                     .unwrap();
                 CommandBinding { command, binding }
             })
             .collect();
 
-        let command_binding_strings: Vec<Span> = command_bindings
+        let string_vec: Vec<String> = command_bindings
             .iter()
             .map(|cb| {
                 let key_str = &keycode_to_string(cb.binding.key_code);
-
                 let command_str = cb.command.name.to_string();
 
-                Span::raw(format!("[{key_str}] {command_str}  "))
+                format!("[{key_str}] {command_str}")
             })
             .collect();
 
-        let text = Line::from(command_binding_strings);
-        let p = Paragraph::new(text)
+        self.command_bindings_string = string_vec.join("  ");
+    }
+}
+
+impl Drawable for Legend {
+    fn draw(&mut self, f: &mut Frame, area: Rect) {
+        let line = Line::from(self.command_bindings_string.clone());
+        let p = Paragraph::new(line)
             .block(Block::bordered())
             .style(Style::new().white().on_black());
 

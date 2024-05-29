@@ -4,6 +4,7 @@ mod command;
 mod file_explorer;
 mod legend;
 mod text_editor;
+mod window;
 
 use app::App;
 use crossterm::{

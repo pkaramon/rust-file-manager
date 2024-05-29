@@ -1,3 +1,4 @@
+use crossterm::event::KeyCode;
 use ratatui::{
     layout::Rect,
     style::{Color, Style},
@@ -8,16 +9,22 @@ use ratatui::{
 use std::fs;
 use std::path::PathBuf;
 
+use crate::{
+    command::{Command, CommandHandler},
+    window::{Drawable, Focusable},
+};
+
 pub struct FileExplorer {
     pub current_dir: PathBuf,
     pub selected_index: usize,
     pub entries: Vec<PathBuf>,
     pub list_state: ListState,
-    pub is_active: bool,
+    is_focused: bool,
+    name: &'static str,
 }
 
 impl FileExplorer {
-    pub fn new() -> Self {
+    pub fn new(name: &'static str) -> Self {
         let current_dir = std::env::current_dir().unwrap();
         let entries = read_dir_entries(&current_dir);
         let mut list_state = ListState::default();
@@ -27,7 +34,8 @@ impl FileExplorer {
             selected_index: 0,
             entries,
             list_state,
-            is_active: true,
+            is_focused: false,
+            name,
         }
     }
 
@@ -38,31 +46,46 @@ impl FileExplorer {
         self.list_state.select(Some(self.selected_index));
     }
 
-    pub fn select_previous(&mut self) {
+    pub fn select_previous(&mut self, _: KeyCode) -> bool {
         if self.selected_index > 0 {
             self.selected_index -= 1;
             self.list_state.select(Some(self.selected_index));
         }
+        true
     }
 
-    pub fn select_next(&mut self) {
+    pub fn select_next(&mut self, _: KeyCode) -> bool {
         if self.selected_index < self.entries.len() - 1 {
             self.selected_index += 1;
             self.list_state.select(Some(self.selected_index));
         }
+        true
     }
 
-    pub fn go_back(&mut self) {
+    pub fn go_back(&mut self, _: KeyCode) -> bool {
         if let Some(parent) = self.current_dir.parent() {
             self.change_directory(parent.to_path_buf());
         }
+        true
     }
 
     pub fn get_selected_file(&self) -> &PathBuf {
         &self.entries[self.selected_index]
     }
 
-    pub fn draw<'a>(&'a mut self, f: &mut Frame, area: Rect) {
+    pub fn open_selected_file(&mut self, _: KeyCode) -> bool {
+        let selected_file = self.get_selected_file();
+        if selected_file.is_dir() {
+            self.change_directory(selected_file.clone());
+            true
+        } else {
+            false
+        }
+    }
+}
+
+impl Drawable for FileExplorer {
+    fn draw(&mut self, f: &mut Frame, area: Rect) {
         let items: Vec<ListItem> = self
             .entries
             .iter()
@@ -76,16 +99,63 @@ impl FileExplorer {
             .borders(Borders::ALL)
             .title(self.current_dir.to_str().unwrap());
 
-        if self.is_active {
+        if self.is_focused {
             block = block.border_style(Color::Blue);
         }
 
-        let list = List::new(items)
-            .block(block)
-            .highlight_style(Style::default().bg(Color::Blue))
-            .highlight_symbol(">> ");
+        let mut list = List::new(items).block(block);
+
+        if self.is_focused {
+            list = list
+                .highlight_style(Style::default().bg(Color::Blue))
+                .highlight_symbol(">> ");
+        }
 
         f.render_stateful_widget(list, area, &mut self.list_state);
+    }
+}
+
+impl Focusable for FileExplorer {
+    fn focus(&mut self) {
+        self.is_focused = true;
+    }
+
+    fn unfocus(&mut self) {
+        self.is_focused = false;
+    }
+
+    fn is_focused(&self) -> bool {
+        self.is_focused
+    }
+}
+
+impl CommandHandler for FileExplorer {
+    fn get_name(&mut self) -> &'static str {
+        self.name
+    }
+    fn get_commands(&self) -> Vec<Command<Self>> {
+        vec![
+            Command {
+                id: "explorer.select_previous_file",
+                name: "Prev file",
+                func: FileExplorer::select_previous,
+            },
+            Command {
+                id: "explorer.select_next_file",
+                name: "Next file",
+                func: FileExplorer::select_next,
+            },
+            Command {
+                id: "explorer.go_back",
+                name: "Back",
+                func: FileExplorer::go_back,
+            },
+            Command {
+                id: "explorer.open_selected_file",
+                name: "Open file",
+                func: FileExplorer::open_selected_file,
+            },
+        ]
     }
 }
 

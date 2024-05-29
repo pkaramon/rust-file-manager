@@ -1,31 +1,44 @@
 use crossterm::event::KeyCode;
 
+#[derive(Copy, Clone)]
 pub struct Binding {
-    pub key_code: KeyCode,
     pub command_id: &'static str,
+    pub key_code: KeyCode,
 }
 
 pub fn get_bindings() -> Vec<Binding> {
     vec![
         Binding {
+            command_id: "app.quit",
             key_code: KeyCode::Char('q'),
-            command_id: "quit",
         },
         Binding {
-            key_code: KeyCode::Up,
-            command_id: "select_previous_file",
-        },
-        Binding {
-            key_code: KeyCode::Down,
-            command_id: "select_next_file",
-        },
-        Binding {
+            command_id: "app.open_selected_file",
             key_code: KeyCode::Enter,
-            command_id: "open_selected_file",
         },
         Binding {
+            command_id: "app.go_back",
             key_code: KeyCode::Esc,
-            command_id: "go_back",
+        },
+        Binding {
+            command_id: "explorer.select_previous_file",
+            key_code: KeyCode::Up,
+        },
+        Binding {
+            command_id: "explorer.select_next_file",
+            key_code: KeyCode::Down,
+        },
+        Binding {
+            command_id: "explorer.open_selected_file",
+            key_code: KeyCode::Enter,
+        },
+        Binding {
+            command_id: "explorer.go_back",
+            key_code: KeyCode::Esc,
+        },
+        Binding {
+            command_id: "text_editor.next_char",
+            key_code: KeyCode::Right,
         },
     ]
 }
