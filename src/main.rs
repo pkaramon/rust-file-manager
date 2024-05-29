@@ -1,7 +1,8 @@
 mod app;
+mod binding;
+mod command;
 mod file_explorer;
 mod legend;
-mod navigation;
 mod text_editor;
 
 use app::App;
