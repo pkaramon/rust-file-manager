@@ -85,8 +85,6 @@ impl App {
                 .collect()
         };
 
-        log("window changed");
-
         self.legend.update_command_bindings(commands_data);
     }
 
@@ -125,10 +123,16 @@ impl InputHandler for App {
     fn handle_input(&mut self, key_code: KeyCode) -> bool {
         let mut captured = false;
 
-        let editor = self.provide_editor();
-
-        if editor.is_focused() {
-            captured |= editor.handle_input(key_code);
+        if self.provide_editor().is_focused() {
+            if self.provide_editor().modal_open() {
+                if key_code == KeyCode::Char('y') {
+                    self.provide_editor().confirm_modal();
+                } else if key_code == KeyCode::Char('n') {
+                    self.provide_editor().refuse_modal();
+                }
+                captured = self.go_back(key_code);
+            }
+            captured |= self.provide_editor().handle_input(key_code);
         } else if self.explorer.is_focused() {
             captured |= self.explorer.handle_input(key_code);
             if captured {

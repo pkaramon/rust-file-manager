@@ -17,6 +17,8 @@ pub enum EditorEnum {
 
 pub trait Editor: Drawable + Focusable + InputHandler {
     fn set_path(&mut self, path: PathBuf);
+    fn confirm_modal(&mut self) {}
+    fn refuse_modal(&mut self) {}
 }
 
 impl EditorEnum {
@@ -74,6 +76,27 @@ impl EditorEnum {
                 .iter()
                 .map(|c| (c.id, c.name))
                 .collect(),
+        }
+    }
+
+    pub fn modal_open(&self) -> bool {
+        match self {
+            EditorEnum::TextEditor(editor) => editor.modal_open,
+            _ => false,
+        }
+    }
+
+    pub fn confirm_modal(&mut self) {
+        match self {
+            EditorEnum::TextEditor(editor) => editor.confirm_modal(),
+            EditorEnum::PreviewExplorer(editor) => editor.confirm_modal(),
+        }
+    }
+
+    pub fn refuse_modal(&mut self) {
+        match self {
+            EditorEnum::TextEditor(editor) => editor.refuse_modal(),
+            EditorEnum::PreviewExplorer(editor) => editor.refuse_modal(),
         }
     }
 }

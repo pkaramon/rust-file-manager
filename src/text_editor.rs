@@ -2,10 +2,10 @@ use std::{fs, path::PathBuf};
 
 use crossterm::event::KeyCode;
 use ratatui::{
-    layout::Rect,
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style, Stylize},
     text::{Line, Span},
-    widgets::{Block, Clear, Paragraph},
+    widgets::{Block, Borders, Paragraph},
     Frame,
 };
 
@@ -41,6 +41,7 @@ pub struct TextEditor {
     lines: Vec<String>,
     mode: Mode,
     file_saved: bool,
+    pub modal_open: bool,
 }
 
 impl TextEditor {
@@ -52,6 +53,7 @@ impl TextEditor {
             lines: Vec::new(),
             mode: Mode::View,
             file_saved: true,
+            modal_open: false,
         };
         editor
     }
@@ -106,6 +108,7 @@ impl TextEditor {
 
     pub fn save(&mut self) {
         self.file_saved = true;
+        let _ = fs::write(self.file.clone(), self.get_text());
     }
 
     pub fn edit_mode(&mut self) {
@@ -114,7 +117,12 @@ impl TextEditor {
 
     pub fn go_back(&mut self, _: KeyCode) -> bool {
         if self.mode == Mode::View {
-            false
+            if self.file_saved {
+                false
+            } else {
+                self.modal_open = true;
+                true
+            }
         } else {
             self.mode = Mode::View;
             true
@@ -245,29 +253,95 @@ impl TextEditor {
             format!("{}{}", mode_str, filename)
         }
     }
+
+    fn get_text(&self) -> String {
+        self.lines.join("\n")
+    }
+
+    fn draw_modal(&mut self, f: &mut Frame, area: Rect) {
+        let tmp = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(40),
+                Constraint::Percentage(20),
+                Constraint::Percentage(40),
+            ])
+            .split(area);
+
+        let popup_wrapper = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(25),
+                Constraint::Percentage(50),
+                Constraint::Percentage(25),
+            ])
+            .split(tmp[1])[1];
+
+        let v_segments = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(10),
+                Constraint::Percentage(30),
+                Constraint::Percentage(10),
+                Constraint::Percentage(30),
+            ])
+            .split(popup_wrapper);
+
+        let question_wrapper = v_segments[1];
+
+        let spacer_block = Block::new().borders(Borders::LEFT | Borders::RIGHT);
+        let spacer = v_segments[2];
+
+        let answer_segments = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(v_segments[3]);
+
+        let yes_wrapper = answer_segments[0];
+        let no_wrapper = answer_segments[1];
+
+        let question_block = Block::new().borders(Borders::LEFT | Borders::RIGHT | Borders::TOP);
+        let question = Paragraph::new("Save?").centered().block(question_block);
+
+        let yes_block = Block::new().borders(Borders::LEFT | Borders::BOTTOM);
+        let yes = Paragraph::new("Yes [y]").centered().block(yes_block);
+
+        let no_block = Block::new().borders(Borders::RIGHT | Borders::BOTTOM);
+        let no = Paragraph::new("No [n]").centered().block(no_block);
+
+        f.render_widget(question, question_wrapper);
+        f.render_widget(yes, yes_wrapper);
+        f.render_widget(no, no_wrapper);
+        f.render_widget(spacer_block, spacer);
+    }
 }
 
 impl Drawable for TextEditor {
     fn draw(&mut self, f: &mut Frame, area: Rect) {
-        let mut block = Block::bordered().title(self.get_title());
+        if self.modal_open {
+            self.draw_modal(f, area);
+        } else {
+            let mut block = Block::bordered().title(self.get_title());
 
-        if self.is_focused {
-            block = block.border_style(Color::Blue);
+            if self.is_focused {
+                block = block.border_style(Color::Blue);
+            }
+
+            let lines: Vec<Line> = self
+                .lines
+                .iter()
+                .enumerate()
+                .map(|(index, line_str)| {
+                    self.highlight_cursor((index, line_str), self.cursor_position)
+                })
+                .collect();
+
+            let p = Paragraph::new(lines)
+                .block(block)
+                .style(Style::new().white().on_black());
+
+            f.render_widget(p, area);
         }
-
-        let lines: Vec<Line> = self
-            .lines
-            .iter()
-            .enumerate()
-            .map(|(index, line_str)| self.highlight_cursor((index, line_str), self.cursor_position))
-            .collect();
-
-        let p = Paragraph::new(lines)
-            .block(block)
-            .style(Style::new().white().on_black());
-
-        f.render_widget(Clear, area);
-        f.render_widget(p, area);
     }
 }
 
@@ -299,12 +373,16 @@ fn is_insertable_key_code(key_code: KeyCode) -> bool {
 
 impl InputHandler for TextEditor {
     fn handle_input(&mut self, key_code: KeyCode) -> bool {
-        match self.mode {
-            Mode::Edit if is_insertable_key_code(key_code) => {
-                self.insert(key_code);
-                true
+        if self.modal_open {
+            false
+        } else {
+            match self.mode {
+                Mode::Edit if is_insertable_key_code(key_code) => {
+                    self.insert(key_code);
+                    true
+                }
+                Mode::View | Mode::Edit => self.handle_command(key_code),
             }
-            Mode::View | Mode::Edit => self.handle_command(key_code),
         }
     }
 }
@@ -362,5 +440,15 @@ impl Editor for TextEditor {
         self.lines = text.split("\n").map(|str| String::from(str)).collect();
         self.cursor_position = CursorPosition::new();
         self.file_saved = true;
+    }
+
+    fn confirm_modal(&mut self) {
+        self.modal_open = false;
+        self.save();
+    }
+
+    fn refuse_modal(&mut self) {
+        self.modal_open = false;
+        self.set_path(self.file.clone());
     }
 }
