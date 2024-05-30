@@ -8,11 +8,25 @@ pub struct Command<T> {
     pub func: fn(&mut T, KeyCode) -> bool,
 }
 
+#[macro_export]
+macro_rules! as_command {
+    ($type:ty, $func:ident) => {
+        |handler, _| {
+            handler.$func();
+            true
+        }
+    };
+}
+
+pub trait InputHandler {
+    fn handle_input(&mut self, key_code: KeyCode) -> bool;
+}
+
 pub trait CommandHandler: Sized {
     fn get_name(&self) -> &'static str;
     fn get_commands(&self) -> Vec<Command<Self>>;
 
-    fn handle(&mut self, key_code: KeyCode) -> bool {
+    fn handle_command(&mut self, key_code: KeyCode) -> bool {
         let name = self.get_name();
         let bindings = get_bindings();
 

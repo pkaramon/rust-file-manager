@@ -1,7 +1,7 @@
 use std::fs::OpenOptions;
 use std::io::Write;
 
-use crate::command::{Command, CommandHandler};
+use crate::command::{Command, CommandHandler, InputHandler};
 use crate::editor::EditorEnum;
 use crate::file_explorer::FileExplorer;
 use crate::legend::Legend;
@@ -69,27 +69,6 @@ impl App {
         self.legend.draw(f, main_layout[1]);
     }
 
-    pub fn handle_input(&mut self, key_code: KeyCode) {
-        let mut captured = false;
-
-        let editor = self.provide_editor();
-
-        if editor.is_focused() {
-            captured |= editor.handle(key_code);
-        } else if self.explorer.is_focused() {
-            captured |= self.explorer.handle(key_code);
-            if captured {
-                self.on_selected_file_change();
-            }
-        }
-        if !captured {
-            captured |= self.handle(key_code);
-            if captured {
-                self.on_window_change();
-            }
-        }
-    }
-
     fn on_selected_file_change(&mut self) {
         let selected_file = self.explorer.get_selected_file();
         self.provide_editor().set_path(selected_file);
@@ -139,6 +118,30 @@ impl App {
             &mut self.editors[1]
         };
         editor
+    }
+}
+
+impl InputHandler for App {
+    fn handle_input(&mut self, key_code: KeyCode) -> bool {
+        let mut captured = false;
+
+        let editor = self.provide_editor();
+
+        if editor.is_focused() {
+            captured |= editor.handle_input(key_code);
+        } else if self.explorer.is_focused() {
+            captured |= self.explorer.handle_input(key_code);
+            if captured {
+                self.on_selected_file_change();
+            }
+        }
+        if !captured {
+            captured |= self.handle_command(key_code);
+            if captured {
+                self.on_window_change();
+            }
+        }
+        captured
     }
 }
 

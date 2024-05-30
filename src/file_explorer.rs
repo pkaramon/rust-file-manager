@@ -10,7 +10,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use crate::{
-    command::{Command, CommandHandler},
+    command::{Command, CommandHandler, InputHandler},
     editor::Editor,
     window::{Drawable, Focusable},
 };
@@ -158,6 +158,12 @@ impl CommandHandler for FileExplorer {
                 },
             ]
         }
+    }
+}
+
+impl InputHandler for FileExplorer {
+    fn handle_input(&mut self, key_code: KeyCode) -> bool {
+        self.handle_command(key_code)
     }
 }
 

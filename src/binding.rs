@@ -1,6 +1,5 @@
 use crossterm::event::KeyCode;
 
-#[derive(Copy, Clone)]
 pub struct Binding {
     pub command_id: &'static str,
     pub key_code: KeyCode,
@@ -38,19 +37,31 @@ pub fn get_bindings() -> Vec<Binding> {
         },
         Binding {
             command_id: "text_editor.next_char",
-            key_code: KeyCode::Right,
+            key_code: KeyCode::Char('l'),
         },
         Binding {
             command_id: "text_editor.prev_char",
-            key_code: KeyCode::Left,
+            key_code: KeyCode::Char('h'),
         },
         Binding {
             command_id: "text_editor.next_line",
-            key_code: KeyCode::Down,
+            key_code: KeyCode::Char('j'),
         },
         Binding {
             command_id: "text_editor.prev_line",
-            key_code: KeyCode::Up,
+            key_code: KeyCode::Char('k'),
+        },
+        Binding {
+            command_id: "text_editor.save",
+            key_code: KeyCode::Char('s'),
+        },
+        Binding {
+            command_id: "text_editor.insert_mode",
+            key_code: KeyCode::Char('i'),
+        },
+        Binding {
+            command_id: "text_editor.go_back",
+            key_code: KeyCode::Esc,
         },
     ]
 }

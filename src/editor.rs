@@ -4,7 +4,7 @@ use crossterm::event::KeyCode;
 use ratatui::{layout::Rect, Frame};
 
 use crate::{
-    command::CommandHandler,
+    command::{CommandHandler, InputHandler},
     file_explorer::FileExplorer,
     text_editor::TextEditor,
     window::{Drawable, Focusable},
@@ -15,7 +15,7 @@ pub enum EditorEnum {
     PreviewExplorer(FileExplorer),
 }
 
-pub trait Editor: Drawable + Focusable + CommandHandler {
+pub trait Editor: Drawable + Focusable + InputHandler {
     fn set_path(&mut self, path: PathBuf);
 }
 
@@ -55,10 +55,10 @@ impl EditorEnum {
         }
     }
 
-    pub fn handle(&mut self, key_code: KeyCode) -> bool {
+    pub fn handle_input(&mut self, key_code: KeyCode) -> bool {
         match self {
-            EditorEnum::TextEditor(editor) => editor.handle(key_code),
-            EditorEnum::PreviewExplorer(editor) => editor.handle(key_code),
+            EditorEnum::TextEditor(editor) => editor.handle_input(key_code),
+            EditorEnum::PreviewExplorer(editor) => editor.handle_input(key_code),
         }
     }
 

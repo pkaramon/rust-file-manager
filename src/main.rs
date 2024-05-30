@@ -8,6 +8,7 @@ mod text_editor;
 mod window;
 
 use app::App;
+use command::InputHandler;
 use crossterm::{
     event::{self, KeyEventKind},
     execute,
