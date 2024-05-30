@@ -1,6 +1,8 @@
-use std::fs::{self};
+use std::fs::OpenOptions;
+use std::io::Write;
 
 use crate::command::{Command, CommandHandler};
+use crate::editor::EditorEnum;
 use crate::file_explorer::FileExplorer;
 use crate::legend::Legend;
 use crate::text_editor::TextEditor;
@@ -11,27 +13,41 @@ use ratatui::Frame;
 
 pub struct App {
     pub explorer: FileExplorer,
-    pub preview_explorer: FileExplorer,
-    pub text_editor: TextEditor,
+    editors: [EditorEnum; 2],
     pub legend: Legend,
     pub should_stop: bool,
 }
 
+fn log(text: &str) {
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("log.txt")
+        .unwrap();
+    let _ = file.write_all(format!("{}\n", text).as_bytes());
+}
+
 impl App {
     pub fn new() -> App {
-        let explorer = FileExplorer::new("explorer");
-        let preview_explorer = FileExplorer::new("preview_explorer");
+        let explorer = FileExplorer::new("explorer", true);
+
+        let editors = [
+            EditorEnum::PreviewExplorer(FileExplorer::new("preview_explorer", false)),
+            EditorEnum::TextEditor(TextEditor::new()),
+        ];
 
         let mut app = App {
             explorer,
-            preview_explorer,
-            text_editor: TextEditor::new(),
+            editors,
             legend: Legend::new(),
             should_stop: false,
         };
 
+        log("app started");
+
         app.explorer.focus();
-        app.update_view();
+        app.on_selected_file_change();
+        app.on_window_change();
         app
     }
 
@@ -48,49 +64,51 @@ impl App {
 
         self.explorer.draw(f, top_layout[0]);
 
-        if self.explorer.get_selected_file().is_dir() {
-            self.preview_explorer.draw(f, top_layout[1]);
-        } else {
-            self.text_editor.draw(f, top_layout[1]);
-        }
+        self.provide_editor().draw(f, top_layout[1]);
 
         self.legend.draw(f, main_layout[1]);
     }
 
-    fn focused_window_handle_input(&mut self, key_code: KeyCode) {
+    pub fn handle_input(&mut self, key_code: KeyCode) {
         let mut captured = false;
 
-        if self.text_editor.is_focused() {
-            captured |= self.text_editor.handle(key_code);
+        let editor = self.provide_editor();
+
+        if editor.is_focused() {
+            captured |= editor.handle(key_code);
         } else if self.explorer.is_focused() {
             captured |= self.explorer.handle(key_code);
+            if captured {
+                self.on_selected_file_change();
+            }
         }
         if !captured {
-            self.handle(key_code);
+            captured |= self.handle(key_code);
+            if captured {
+                self.on_window_change();
+            }
         }
     }
 
-    pub fn handle_input(&mut self, key_code: KeyCode) {
-        self.focused_window_handle_input(key_code);
-        self.update_view();
+    fn on_selected_file_change(&mut self) {
+        let selected_file = self.explorer.get_selected_file();
+        self.provide_editor().set_path(selected_file);
     }
 
-    fn update_view(&mut self) {
-        let selected_file = self.explorer.get_selected_file().clone();
-        if selected_file.is_dir() {
-            self.preview_explorer
-                .change_directory(selected_file.clone());
+    fn on_window_change(&mut self) {
+        let commands_data = if self.provide_editor().is_focused() {
+            self.provide_editor().get_commands_data()
         } else {
-            let content = fs::read_to_string(selected_file.clone())
-                .unwrap_or("Unable to read file".to_string());
-            self.text_editor.set_text(content);
-        }
+            self.explorer
+                .get_commands()
+                .iter()
+                .map(|c| (c.id, c.name))
+                .collect()
+        };
 
-        if self.text_editor.is_focused() {
-            self.legend.update_command_bindings(&mut self.text_editor);
-        } else if self.explorer.is_focused() {
-            self.legend.update_command_bindings(&self.explorer);
-        }
+        log("window changed");
+
+        self.legend.update_command_bindings(commands_data);
     }
 
     fn quit(&mut self, _: KeyCode) -> bool {
@@ -99,23 +117,33 @@ impl App {
     }
 
     fn open_selected_file(&mut self, _: KeyCode) -> bool {
-        let selected_path = self.explorer.get_selected_file().clone();
+        let selected_path = self.explorer.get_selected_file();
         if !selected_path.is_dir() {
             self.explorer.unfocus();
-            self.text_editor.focus();
+            self.provide_editor().focus();
         }
         true
     }
 
     fn go_back(&mut self, _: KeyCode) -> bool {
-        self.text_editor.unfocus();
+        self.provide_editor().unfocus();
         self.explorer.focus();
         true
+    }
+
+    fn provide_editor(&mut self) -> &mut EditorEnum {
+        let path = self.explorer.get_selected_file();
+        let editor = if path.is_dir() {
+            &mut self.editors[0]
+        } else {
+            &mut self.editors[1]
+        };
+        editor
     }
 }
 
 impl CommandHandler for App {
-    fn get_name(&mut self) -> &'static str {
+    fn get_name(&self) -> &'static str {
         "app"
     }
     fn get_commands(&self) -> Vec<Command<App>> {

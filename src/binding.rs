@@ -40,5 +40,17 @@ pub fn get_bindings() -> Vec<Binding> {
             command_id: "text_editor.next_char",
             key_code: KeyCode::Right,
         },
+        Binding {
+            command_id: "text_editor.prev_char",
+            key_code: KeyCode::Left,
+        },
+        Binding {
+            command_id: "text_editor.next_line",
+            key_code: KeyCode::Down,
+        },
+        Binding {
+            command_id: "text_editor.prev_line",
+            key_code: KeyCode::Up,
+        },
     ]
 }

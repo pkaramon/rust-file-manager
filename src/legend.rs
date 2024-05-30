@@ -9,7 +9,6 @@ use ratatui::{
 
 use crate::{
     binding::{get_bindings, Binding},
-    command::{Command, CommandHandler},
     window::Drawable,
 };
 
@@ -17,8 +16,8 @@ pub struct Legend {
     command_bindings_string: String,
 }
 
-struct CommandBinding<'a, T> {
-    command: &'a Command<T>,
+struct CommandBinding<'a> {
+    command: &'a (&'static str, &'static str),
     binding: &'a Binding,
 }
 
@@ -29,16 +28,15 @@ impl Legend {
         }
     }
 
-    pub fn update_command_bindings<T: CommandHandler>(&mut self, handler: &T) {
+    pub fn update_command_bindings(&mut self, commands: Vec<(&'static str, &'static str)>) {
         let bindings = get_bindings();
-        let commands = handler.get_commands();
 
-        let command_bindings: Vec<CommandBinding<T>> = commands
+        let command_bindings: Vec<CommandBinding> = commands
             .iter()
             .map(|command| {
                 let binding = bindings
                     .iter()
-                    .find(|binding| binding.command_id == command.id)
+                    .find(|binding| binding.command_id == command.0)
                     .unwrap();
                 CommandBinding { command, binding }
             })
@@ -48,7 +46,7 @@ impl Legend {
             .iter()
             .map(|cb| {
                 let key_str = &keycode_to_string(cb.binding.key_code);
-                let command_str = cb.command.name.to_string();
+                let command_str = cb.command.1.to_string();
 
                 format!("[{key_str}] {command_str}")
             })

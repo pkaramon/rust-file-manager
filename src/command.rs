@@ -5,11 +5,11 @@ use crate::binding::get_bindings;
 pub struct Command<T> {
     pub id: &'static str,
     pub name: &'static str,
-    pub func: fn(&mut T, key_code: KeyCode) -> bool,
+    pub func: fn(&mut T, KeyCode) -> bool,
 }
 
 pub trait CommandHandler: Sized {
-    fn get_name(&mut self) -> &'static str;
+    fn get_name(&self) -> &'static str;
     fn get_commands(&self) -> Vec<Command<Self>>;
 
     fn handle(&mut self, key_code: KeyCode) -> bool {
