@@ -1,5 +1,9 @@
-use std::{fs, path::PathBuf};
+use std::{
+    fs::{self},
+    path::PathBuf,
+};
 
+use anyhow::{Context, Result};
 use crossterm::event::KeyCode;
 use ratatui::{
     layout::Rect,
@@ -112,12 +116,12 @@ impl TextEditor {
         self.mode = Mode::Edit;
     }
 
-    pub fn go_back(&mut self, _: KeyCode) -> bool {
+    pub fn go_back(&mut self, _: KeyCode) -> Result<bool> {
         if self.mode == Mode::View {
-            false
+            Ok(false)
         } else {
             self.mode = Mode::View;
-            true
+            Ok(true)
         }
     }
 
@@ -298,11 +302,11 @@ fn is_insertable_key_code(key_code: KeyCode) -> bool {
 }
 
 impl InputHandler for TextEditor {
-    fn handle_input(&mut self, key_code: KeyCode) -> bool {
+    fn handle_input(&mut self, key_code: KeyCode) -> Result<bool> {
         match self.mode {
             Mode::Edit if is_insertable_key_code(key_code) => {
                 self.insert(key_code);
-                true
+                Ok(true)
             }
             Mode::View | Mode::Edit => self.handle_command(key_code),
         }
@@ -355,12 +359,16 @@ impl CommandHandler for TextEditor {
 }
 
 impl Editor for TextEditor {
-    fn set_path(&mut self, path: PathBuf) {
+    fn set_path(&mut self, path: PathBuf) -> Result<()> {
         self.file = path;
-        let text =
-            fs::read_to_string(self.file.clone()).unwrap_or("Unable to read file".to_string());
+
+        let text = fs::read_to_string(&self.file).context("Binary file")?;
+        self.lines = text.split("\n").map(|str| String::from(str)).collect();
+        let text = fs::read_to_string(&self.file).context("Unable to read file")?;
         self.lines = text.split("\n").map(|str| String::from(str)).collect();
         self.cursor_position = CursorPosition::new();
         self.file_saved = true;
+
+        Ok(())
     }
 }

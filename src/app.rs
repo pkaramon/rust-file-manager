@@ -7,32 +7,37 @@ use crate::file_explorer::FileExplorer;
 use crate::legend::Legend;
 use crate::text_editor::TextEditor;
 use crate::window::{Drawable, Focusable};
+use anyhow::{Context, Result};
 use crossterm::event::KeyCode;
 use ratatui::layout::{Constraint, Direction, Layout};
+use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
 pub struct App {
     pub explorer: FileExplorer,
     editors: [EditorEnum; 2],
+    info_message: Option<String>,
     pub legend: Legend,
     pub should_stop: bool,
 }
 
-fn log(text: &str) {
+fn log(text: &str) -> Result<()> {
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
         .open("log.txt")
-        .unwrap();
-    let _ = file.write_all(format!("{}\n", text).as_bytes());
+        .context("failed to open log file")?;
+    file.write_all(format!("{}\n", text).as_bytes())
+        .context("failed to write to log file")?;
+    Ok(())
 }
 
 impl App {
-    pub fn new() -> App {
-        let explorer = FileExplorer::new("explorer", true);
+    pub fn new() -> Result<App> {
+        let explorer = FileExplorer::new("explorer", true)?;
 
         let editors = [
-            EditorEnum::PreviewExplorer(FileExplorer::new("preview_explorer", false)),
+            EditorEnum::PreviewExplorer(FileExplorer::new("preview_explorer", false)?),
             EditorEnum::TextEditor(TextEditor::new()),
         ];
 
@@ -41,17 +46,18 @@ impl App {
             editors,
             legend: Legend::new(),
             should_stop: false,
+            info_message: None,
         };
 
-        log("app started");
+        log("app started")?;
 
         app.explorer.focus();
-        app.on_selected_file_change();
-        app.on_window_change();
-        app
+        app.on_selected_file_change()?;
+        app.on_window_change()?;
+        Ok(app)
     }
 
-    pub fn draw(&mut self, f: &mut Frame) {
+    pub fn draw(&mut self, f: &mut Frame) -> Result<()> {
         let main_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Percentage(100), Constraint::Min(3)])
@@ -64,19 +70,34 @@ impl App {
 
         self.explorer.draw(f, top_layout[0]);
 
-        self.provide_editor().draw(f, top_layout[1]);
+        if let Some(error_message) = &self.info_message {
+            let paragraph = Paragraph::new(error_message.clone())
+                .block(Block::default().borders(Borders::ALL).title("Info"));
+            f.render_widget(paragraph, top_layout[1]);
+        } else {
+            self.provide_editor()?.draw(f, top_layout[1]);
+        }
 
         self.legend.draw(f, main_layout[1]);
+
+        Ok(())
     }
 
-    fn on_selected_file_change(&mut self) {
-        let selected_file = self.explorer.get_selected_file();
-        self.provide_editor().set_path(selected_file);
+    fn on_selected_file_change(&mut self) -> Result<()> {
+        if let Ok(selected_file) = self.explorer.get_selected_file() {
+            if let Err(x) = self.provide_editor()?.set_path(selected_file) {
+                self.info_message = Some(x.to_string());
+            } else {
+                self.info_message = None;
+            }
+        }
+
+        Ok(())
     }
 
-    fn on_window_change(&mut self) {
-        let commands_data = if self.provide_editor().is_focused() {
-            self.provide_editor().get_commands_data()
+    fn on_window_change(&mut self) -> Result<()> {
+        let commands_data: Vec<(&str, &str)> = if self.provide_editor()?.is_focused() {
+            self.provide_editor()?.get_commands_data()
         } else {
             self.explorer
                 .get_commands()
@@ -85,63 +106,70 @@ impl App {
                 .collect()
         };
 
-        log("window changed");
+        log("window changed")?;
 
         self.legend.update_command_bindings(commands_data);
+        Ok(())
     }
 
-    fn quit(&mut self, _: KeyCode) -> bool {
+    fn quit(&mut self, _: KeyCode) -> Result<bool> {
         self.should_stop = true;
-        true
+        Ok(true)
     }
 
-    fn open_selected_file(&mut self, _: KeyCode) -> bool {
-        let selected_path = self.explorer.get_selected_file();
-        if !selected_path.is_dir() {
-            self.explorer.unfocus();
-            self.provide_editor().focus();
+    fn open_selected_file(&mut self, _: KeyCode) -> Result<bool> {
+        if let Ok(selected_path) = self.explorer.get_selected_file() {
+            if !selected_path.is_dir() && self.info_message.is_none() {
+                self.explorer.unfocus();
+                self.provide_editor()?.focus();
+            }
         }
-        true
+        Ok(true)
     }
 
-    fn go_back(&mut self, _: KeyCode) -> bool {
-        self.provide_editor().unfocus();
+    fn go_back(&mut self, _: KeyCode) -> Result<bool> {
+        self.provide_editor()?.unfocus();
         self.explorer.focus();
-        true
+        Ok(true)
     }
 
-    fn provide_editor(&mut self) -> &mut EditorEnum {
-        let path = self.explorer.get_selected_file();
+    fn provide_editor(&mut self) -> Result<&mut EditorEnum> {
+        let path = self.explorer.get_selected_file()?;
         let editor = if path.is_dir() {
             &mut self.editors[0]
         } else {
             &mut self.editors[1]
         };
-        editor
+        Ok(editor)
     }
 }
 
 impl InputHandler for App {
-    fn handle_input(&mut self, key_code: KeyCode) -> bool {
+    fn handle_input(&mut self, key_code: KeyCode) -> Result<bool> {
         let mut captured = false;
 
-        let editor = self.provide_editor();
+        match self.provide_editor() {
+            Ok(editor) if editor.is_focused() => {
+                captured |= editor.handle_input(key_code)?;
+            }
+            _ => {
+                if self.explorer.is_focused() {
+                    captured |= self.explorer.handle_input(key_code)?;
+                    if captured {
+                        self.on_selected_file_change()?;
+                    }
+                }
+            }
+        }
 
-        if editor.is_focused() {
-            captured |= editor.handle_input(key_code);
-        } else if self.explorer.is_focused() {
-            captured |= self.explorer.handle_input(key_code);
-            if captured {
-                self.on_selected_file_change();
-            }
-        }
         if !captured {
-            captured |= self.handle_command(key_code);
+            captured |= self.handle_command(key_code)?;
             if captured {
-                self.on_window_change();
+                let _ = self.on_window_change();
             }
         }
-        captured
+
+        Ok(captured)
     }
 }
 

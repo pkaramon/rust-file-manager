@@ -7,6 +7,7 @@ mod legend;
 mod text_editor;
 mod window;
 
+use anyhow::Result;
 use app::App;
 use command::InputHandler;
 use crossterm::{
@@ -35,18 +36,20 @@ fn exit(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<(), io:
     Ok(())
 }
 
-fn main() -> Result<(), io::Error> {
+fn main() -> Result<()> {
     let mut terminal = init().unwrap();
 
-    let mut app = App::new();
+    let mut app = App::new()?;
 
     loop {
-        let _ = terminal.draw(|f| app.draw(f));
+        let _ = terminal.draw(|f| {
+            let _ = app.draw(f);
+        });
 
         if event::poll(std::time::Duration::from_millis(16))? {
             if let event::Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press {
-                    app.handle_input(key.code);
+                    let _ = app.handle_input(key.code);
                 }
             }
         }
@@ -56,5 +59,5 @@ fn main() -> Result<(), io::Error> {
         }
     }
 
-    exit(&mut terminal)
+    Ok(exit(&mut terminal)?)
 }

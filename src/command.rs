@@ -1,11 +1,12 @@
 use crossterm::event::KeyCode;
 
 use crate::binding::get_bindings;
+use anyhow::Result;
 
 pub struct Command<T> {
     pub id: &'static str,
     pub name: &'static str,
-    pub func: fn(&mut T, KeyCode) -> bool,
+    pub func: fn(&mut T, KeyCode) -> Result<bool>,
 }
 
 #[macro_export]
@@ -13,20 +14,20 @@ macro_rules! as_command {
     ($type:ty, $func:ident) => {
         |handler, _| {
             handler.$func();
-            true
+            Ok(true)
         }
     };
 }
 
 pub trait InputHandler {
-    fn handle_input(&mut self, key_code: KeyCode) -> bool;
+    fn handle_input(&mut self, key_code: KeyCode) -> Result<bool>;
 }
 
 pub trait CommandHandler: Sized {
     fn get_name(&self) -> &'static str;
     fn get_commands(&self) -> Vec<Command<Self>>;
 
-    fn handle_command(&mut self, key_code: KeyCode) -> bool {
+    fn handle_command(&mut self, key_code: KeyCode) -> Result<bool> {
         let name = self.get_name();
         let bindings = get_bindings();
 
@@ -44,10 +45,10 @@ pub trait CommandHandler: Sized {
                 let command = command_option.unwrap();
                 (command.func)(self, binding.key_code)
             } else {
-                false
+                Ok(false)
             }
         } else {
-            false
+            Ok(false)
         }
     }
 }
