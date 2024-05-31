@@ -10,7 +10,6 @@ use crate::window::{Drawable, Focusable};
 use anyhow::{Context, Result};
 use crossterm::event::KeyCode;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
 pub struct App {
@@ -39,7 +38,9 @@ impl App {
         let editors = [
             EditorEnum::PreviewExplorer(FileExplorer::new("preview_explorer", false)?),
             EditorEnum::TextEditor(TextEditor::new()),
-            EditorEnum::NullEdtior(NullEdtior {}),
+            EditorEnum::NullEdtior(NullEdtior {
+                message: Option::None,
+            }),
         ];
 
         let mut app = App {
@@ -71,13 +72,7 @@ impl App {
 
         self.explorer.draw(f, top_layout[0]);
 
-        if let Some(error_message) = &self.info_message {
-            let paragraph = Paragraph::new(error_message.clone())
-                .block(Block::default().borders(Borders::ALL).title("Info"));
-            f.render_widget(paragraph, top_layout[1]);
-        } else {
-            self.draw_editor(f, top_layout[1])
-        }
+        self.draw_editor(f, top_layout[1]);
 
         self.legend.draw(f, main_layout[1]);
     }
@@ -86,8 +81,12 @@ impl App {
         let file_option = self.explorer.get_selected_file();
 
         if let Some(selected_file) = file_option {
-            if let Err(x) = self.provide_editor().set_path(selected_file) {
+            if let Err(x) = self.provide_editor_mut().set_path(selected_file) {
                 self.info_message = Some(x.to_string());
+                match self.provide_editor_mut() {
+                    EditorEnum::NullEdtior(editor) => editor.message = Some(x.to_string()),
+                    _ => {}
+                }
             } else {
                 self.info_message = None;
             }
@@ -95,8 +94,8 @@ impl App {
     }
 
     fn on_window_change(&mut self) {
-        let commands_data: Vec<(&str, &str)> = if self.provide_editor().is_focused() {
-            self.provide_editor().get_commands_data()
+        let commands_data: Vec<(&str, &str)> = if self.provide_editor_mut().is_focused() {
+            self.provide_editor_mut().get_commands_data()
         } else {
             self.explorer
                 .get_commands()
@@ -118,59 +117,67 @@ impl App {
         if let Some(selected_path) = file_option {
             if !selected_path.is_dir() && self.info_message.is_none() {
                 self.explorer.unfocus();
-                self.provide_editor().focus();
+                self.provide_editor_mut().focus();
             }
         }
         true
     }
 
     fn go_back(&mut self, _: KeyCode) -> bool {
-        self.provide_editor().unfocus();
+        self.provide_editor_mut().unfocus();
         self.explorer.focus();
         true
     }
 
-    fn provide_editor(&mut self) -> &mut EditorEnum {
-        let editor = if let Some(path) = self.explorer.get_selected_file() {
-            if path.is_dir() {
-                &mut self.editors[0]
-            } else {
-                &mut self.editors[1]
-            }
-        } else {
+    fn provide_editor_mut(&mut self) -> &mut EditorEnum {
+        if let Some(_) = self.info_message {
             &mut self.editors[2]
-        };
-        editor
+        } else {
+            let editor = if let Some(path) = self.explorer.get_selected_file() {
+                if path.is_dir() {
+                    &mut self.editors[0]
+                } else {
+                    &mut self.editors[1]
+                }
+            } else {
+                &mut self.editors[2]
+            };
+            editor
+        }
+    }
+
+    fn provide_editor(&self) -> &EditorEnum {
+        if let Some(_) = self.info_message {
+            &self.editors[2]
+        } else {
+            if let Some(path) = self.explorer.get_selected_file() {
+                if path.is_dir() {
+                    &self.editors[0]
+                } else {
+                    &self.editors[1]
+                }
+            } else {
+                &self.editors[2]
+            }
+        }
     }
 
     fn draw_editor(&self, f: &mut Frame, area: Rect) {
-        if let Some(path) = self.explorer.get_selected_file() {
-            if path.is_dir() {
-                self.editors[0].draw(f, area);
-            } else {
-                self.editors[1].draw(f, area);
-            }
-        } else {
-            self.editors[2].draw(f, area);
-        }
+        self.provide_editor().draw(f, area)
     }
 }
 
 impl InputHandler for App {
     fn handle_input(&mut self, key_code: KeyCode) -> bool {
         let mut captured = false;
-        let editor = self.provide_editor();
+        let editor = self.provide_editor_mut();
 
         if editor.is_focused() {
             if editor.modal_open() {
-                if key_code == KeyCode::Char('y') {
-                    editor.confirm_modal();
-                } else if key_code == KeyCode::Char('n') {
-                    editor.refuse_modal();
-                }
                 captured = self.go_back(key_code);
+            } else {
+                captured |= self.provide_editor_mut().handle_input(key_code);
             }
-            captured |= self.provide_editor().handle_input(key_code);
         } else if self.explorer.is_focused() {
             captured |= self.explorer.handle_input(key_code);
             if captured {

@@ -389,6 +389,13 @@ fn is_insertable_key_code(key_code: KeyCode) -> bool {
 impl InputHandler for TextEditor {
     fn handle_input(&mut self, key_code: KeyCode) -> bool {
         if self.modal_open {
+            if key_code == KeyCode::Char('y') {
+                self.modal_open = false;
+                self.save();
+            } else if key_code == KeyCode::Char('n') {
+                self.modal_open = false;
+                let _ = self.set_path(self.file.clone());
+            }
             false
         } else {
             match self.mode {
@@ -458,15 +465,5 @@ impl Editor for TextEditor {
         self.file_saved = true;
 
         Ok(())
-    }
-
-    fn confirm_modal(&mut self) {
-        self.modal_open = false;
-        self.save();
-    }
-
-    fn refuse_modal(&mut self) {
-        self.modal_open = false;
-        let _ = self.set_path(self.file.clone());
     }
 }

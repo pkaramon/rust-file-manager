@@ -2,7 +2,11 @@ use std::path::PathBuf;
 
 use anyhow::{Ok, Result};
 use crossterm::event::KeyCode;
-use ratatui::{layout::Rect, widgets::Block, Frame};
+use ratatui::{
+    layout::{Constraint, Direction, Layout, Rect},
+    widgets::{Block, Paragraph},
+    Frame,
+};
 
 use crate::{
     command::{CommandHandler, InputHandler},
@@ -19,8 +23,6 @@ pub enum EditorEnum {
 
 pub trait Editor: Drawable + Focusable + InputHandler {
     fn set_path(&mut self, path: PathBuf) -> Result<()>;
-    fn confirm_modal(&mut self) {}
-    fn refuse_modal(&mut self) {}
 }
 
 impl EditorEnum {
@@ -94,30 +96,28 @@ impl EditorEnum {
             _ => false,
         }
     }
-
-    pub fn confirm_modal(&mut self) {
-        match self {
-            EditorEnum::TextEditor(editor) => editor.confirm_modal(),
-            EditorEnum::PreviewExplorer(editor) => editor.confirm_modal(),
-            EditorEnum::NullEdtior(editor) => editor.confirm_modal(),
-        }
-    }
-
-    pub fn refuse_modal(&mut self) {
-        match self {
-            EditorEnum::TextEditor(editor) => editor.refuse_modal(),
-            EditorEnum::PreviewExplorer(editor) => editor.refuse_modal(),
-            EditorEnum::NullEdtior(editor) => editor.refuse_modal(),
-        }
-    }
 }
 
-pub struct NullEdtior {}
+pub struct NullEdtior {
+    pub message: Option<String>,
+}
 
 impl Drawable for NullEdtior {
     fn draw(&self, f: &mut Frame, area: Rect) {
+        let centered = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(40),
+                Constraint::Percentage(20),
+                Constraint::Percentage(40),
+            ])
+            .split(area)[1];
         let block = Block::bordered();
 
+        if let Some(message) = &self.message {
+            let paragraph = Paragraph::new(message.clone()).centered();
+            f.render_widget(paragraph, centered);
+        }
         f.render_widget(block, area);
     }
 }
