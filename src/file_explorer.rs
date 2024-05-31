@@ -13,6 +13,7 @@ use std::{cell::RefCell, fs};
 use crate::{
     command::{Command, CommandHandler, InputHandler},
     editor::Editor,
+    explorer_modal::{Modal, ModalStatus, ModalVariant},
     window::{Drawable, Focusable},
 };
 
@@ -23,7 +24,15 @@ pub struct FileExplorer {
     pub list_state: RefCell<ListState>,
     is_focused: bool,
     interactive: bool,
+    modal: Modal,
+    task: ExplorerModalTask,
     name: &'static str,
+}
+
+enum ExplorerModalTask {
+    DeleteFile(PathBuf),
+    MoveFile(PathBuf),
+    Noop,
 }
 
 impl FileExplorer {
@@ -39,6 +48,8 @@ impl FileExplorer {
             list_state,
             is_focused: false,
             interactive,
+            task: ExplorerModalTask::Noop,
+            modal: Modal::new(),
             name,
         })
     }
@@ -59,6 +70,34 @@ impl FileExplorer {
             self.list_state
                 .borrow_mut()
                 .select(Some(self.selected_index));
+        }
+        Ok(true)
+    }
+
+    pub fn delete_current_file(&mut self, _: KeyCode) -> Result<bool> {
+        if let Ok(selected_file) = self.get_selected_file() {
+            self.modal.open(
+                format!("Delete file: {}?", selected_file.to_str().unwrap()),
+                ModalVariant::Confirmation,
+            );
+            self.task = ExplorerModalTask::DeleteFile(selected_file);
+        } else {
+            self.modal
+                .open("Selected file is invalid".to_string(), ModalVariant::Error)
+        }
+        Ok(true)
+    }
+
+    pub fn move_current_file(&mut self, _: KeyCode) -> Result<bool> {
+        if let Ok(selected_file) = self.get_selected_file() {
+            self.modal.open(
+                format!("Move file: {} to?", selected_file.to_str().unwrap()),
+                ModalVariant::Question(selected_file.to_str().unwrap().to_string()),
+            );
+            self.task = ExplorerModalTask::MoveFile(selected_file);
+        } else {
+            self.modal
+                .open("Selected file is invalid".to_string(), ModalVariant::Error)
         }
         Ok(true)
     }
@@ -87,10 +126,65 @@ impl FileExplorer {
 
         Ok(false)
     }
+
+    fn refresh(&mut self) -> Result<()> {
+        self.entries = read_dir_entries(&self.current_dir)?;
+        self.list_state.borrow_mut().select(Some(0));
+        self.selected_index = 0;
+        self.modal.is_open = false;
+        Ok(())
+    }
+
+    fn handle_modal_tasks(&mut self) -> Result<()> {
+        match self.modal.status {
+            ModalStatus::Refused => self.modal.close(),
+            ModalStatus::Confirmed => match self.modal.variant {
+                ModalVariant::Confirmation => match &self.task {
+                    ExplorerModalTask::DeleteFile(file) => {
+                        let removal = || {
+                            if file.is_dir() {
+                                fs::remove_dir_all(file)
+                            } else {
+                                fs::remove_file(file)
+                            }
+                        };
+                        if let Err(e) = removal() {
+                            self.modal
+                                .open(format!("Could not delete: {}", e), ModalVariant::Error)
+                        } else {
+                            self.refresh()?;
+                        }
+                    }
+                    &_ => {}
+                },
+                ModalVariant::Info | ModalVariant::Error => self.modal.close(),
+                ModalVariant::Question(ref newpath) => match &self.task {
+                    ExplorerModalTask::MoveFile(file) => {
+                        let newpath = PathBuf::from(newpath);
+                        if let Err(e) = fs::rename(file, &newpath) {
+                            self.modal
+                                .open(format!("Could not move file: {}", e), ModalVariant::Error)
+                        } else {
+                            self.refresh()?;
+                        }
+                    }
+                    _ => {}
+                },
+            },
+            _ => {}
+        }
+
+        Ok(())
+    }
 }
 
 impl Drawable for FileExplorer {
     fn draw(&self, f: &mut Frame, area: Rect) {
+        if self.modal.is_open {
+            self.modal.draw(f, area);
+            return;
+        }
+
         let items: Vec<ListItem> = self
             .entries
             .iter()
@@ -137,6 +231,40 @@ impl Focusable for FileExplorer {
     }
 }
 
+impl InputHandler for FileExplorer {
+    fn handle_input(&mut self, key_code: KeyCode) -> Result<bool> {
+        if self.modal.is_open {
+            self.modal.handle_input(key_code);
+            self.handle_modal_tasks()?;
+            return Ok(true);
+        } else {
+            self.handle_command(key_code)
+        }
+    }
+}
+
+impl Editor for FileExplorer {
+    fn set_path(&mut self, new_dir: PathBuf) -> Result<()> {
+        self.entries = read_dir_entries(&new_dir)?;
+        self.current_dir = new_dir;
+        self.selected_index = 0;
+        self.list_state
+            .borrow_mut()
+            .select(Some(self.selected_index));
+        Ok(())
+    }
+}
+
+fn read_dir_entries(dir: &PathBuf) -> Result<Vec<PathBuf>> {
+    let mut entries: Vec<PathBuf> = fs::read_dir(dir)
+        .context("Could not read directory entries")?
+        .filter(|res| res.is_ok())
+        .map(|res| res.unwrap().path())
+        .collect();
+    entries.sort();
+    Ok(entries)
+}
+
 impl CommandHandler for FileExplorer {
     fn get_name(&self) -> &'static str {
         self.name
@@ -166,35 +294,17 @@ impl CommandHandler for FileExplorer {
                     name: "Open file",
                     func: FileExplorer::open_selected_file,
                 },
+                Command {
+                    id: "explorer.delete_current_file",
+                    name: "Delete file",
+                    func: FileExplorer::delete_current_file,
+                },
+                Command {
+                    id: "explorer.move_current_file",
+                    name: "Move file",
+                    func: FileExplorer::move_current_file,
+                },
             ]
         }
     }
-}
-
-impl InputHandler for FileExplorer {
-    fn handle_input(&mut self, key_code: KeyCode) -> Result<bool> {
-        self.handle_command(key_code)
-    }
-}
-
-impl Editor for FileExplorer {
-    fn set_path(&mut self, new_dir: PathBuf) -> Result<()> {
-        self.entries = read_dir_entries(&new_dir)?;
-        self.current_dir = new_dir;
-        self.selected_index = 0;
-        self.list_state
-            .borrow_mut()
-            .select(Some(self.selected_index));
-        Ok(())
-    }
-}
-
-fn read_dir_entries(dir: &PathBuf) -> Result<Vec<PathBuf>> {
-    let mut entries: Vec<PathBuf> = fs::read_dir(dir)
-        .context("Could not read directory entries")?
-        .filter(|res| res.is_ok())
-        .map(|res| res.unwrap().path())
-        .collect();
-    entries.sort();
-    Ok(entries)
 }

@@ -70,8 +70,8 @@ impl App {
 
         self.explorer.draw(f, top_layout[0]);
 
-        if let Some(error_message) = &self.info_message {
-            let paragraph = Paragraph::new(error_message.clone())
+        if let Some(info_massage) = &self.info_message {
+            let paragraph = Paragraph::new(info_massage.clone())
                 .block(Block::default().borders(Borders::ALL).title("Info"));
             f.render_widget(paragraph, top_layout[1]);
         } else {

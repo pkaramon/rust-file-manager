@@ -28,8 +28,24 @@ pub fn get_bindings() -> Vec<Binding> {
             key_code: KeyCode::Down,
         },
         Binding {
+            command_id: "explorer.select_previous_file",
+            key_code: KeyCode::Char('k'),
+        },
+        Binding {
+            command_id: "explorer.select_next_file",
+            key_code: KeyCode::Char('j'),
+        },
+        Binding {
             command_id: "explorer.open_selected_file",
             key_code: KeyCode::Enter,
+        },
+        Binding {
+            command_id: "explorer.delete_current_file",
+            key_code: KeyCode::Char('d'),
+        },
+        Binding {
+            command_id: "explorer.move_current_file",
+            key_code: KeyCode::Char('m'),
         },
         Binding {
             command_id: "explorer.go_back",
