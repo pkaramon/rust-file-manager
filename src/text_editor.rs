@@ -258,7 +258,7 @@ impl TextEditor {
         self.lines.join("\n")
     }
 
-    fn draw_modal(&mut self, f: &mut Frame, area: Rect) {
+    fn draw_modal(&self, f: &mut Frame, area: Rect) {
         let tmp = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -317,7 +317,7 @@ impl TextEditor {
 }
 
 impl Drawable for TextEditor {
-    fn draw(&mut self, f: &mut Frame, area: Rect) {
+    fn draw(&self, f: &mut Frame, area: Rect) {
         if self.modal_open {
             self.draw_modal(f, area);
         } else {

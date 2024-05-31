@@ -57,7 +57,7 @@ impl Legend {
 }
 
 impl Drawable for Legend {
-    fn draw(&mut self, f: &mut Frame, area: Rect) {
+    fn draw(&self, f: &mut Frame, area: Rect) {
         let line = Line::from(self.command_bindings_string.clone());
         let p = Paragraph::new(line)
             .block(Block::bordered())
