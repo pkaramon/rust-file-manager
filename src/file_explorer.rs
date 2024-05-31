@@ -35,6 +35,7 @@ pub struct FileExplorer {
 enum ExplorerModalTask {
     DeleteFile(PathBuf),
     MoveFile(PathBuf),
+    CreateFile,
     Filter,
     Noop,
 }
@@ -165,6 +166,15 @@ impl FileExplorer {
         Ok(true)
     }
 
+    pub fn create_file(&mut self, _: KeyCode) -> Result<bool> {
+        self.modal.open(
+            "Create file: ".to_string(),
+            ModalVariant::Question(String::new()),
+        );
+        self.task = ExplorerModalTask::CreateFile;
+        Ok(true)
+    }
+
     pub fn filter(&mut self, _: KeyCode) -> Result<bool> {
         self.modal.open(
             String::from("Search: "),
@@ -252,6 +262,16 @@ impl FileExplorer {
                     ExplorerModalTask::Filter => {
                         self.name_filter = answer.clone();
                         self.refresh()?;
+                    }
+                    ExplorerModalTask::CreateFile => {
+                        let new_file = self.current_dir.join(answer);
+                        if new_file.exists() {
+                            self.modal
+                                .open("File already exists".to_string(), ModalVariant::Error);
+                        } else {
+                            fs::File::create(&new_file)?;
+                            self.refresh()?;
+                        }
                     }
                     _ => {}
                 },
@@ -402,6 +422,11 @@ impl CommandHandler for FileExplorer {
                     id: "explorer.sort_entries",
                     name: "Sort",
                     func: FileExplorer::sort_entries,
+                },
+                Command {
+                    id: "explorer.create_file",
+                    name: "New file",
+                    func: FileExplorer::create_file,
                 },
                 Command {
                     id: "explorer.filter",

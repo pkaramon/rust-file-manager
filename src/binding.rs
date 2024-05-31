@@ -52,6 +52,10 @@ pub fn get_bindings() -> Vec<Binding> {
             key_code: KeyCode::Char('s'),
         },
         Binding {
+            command_id: "explorer.create_file",
+            key_code: KeyCode::Char('c'),
+        },
+        Binding {
             command_id: "explorer.filter",
             key_code: KeyCode::Char('/'),
         },
