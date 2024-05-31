@@ -1,7 +1,8 @@
 use crossterm::event::KeyCode;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    widgets::{Block, Borders, Paragraph, Wrap},
+    text::Text,
+    widgets::{Block, Borders, List, ListDirection, ListItem, Paragraph, Wrap},
     Frame,
 };
 
@@ -25,6 +26,7 @@ pub enum ModalVariant {
     Error,
     Info,
     Question(String),
+    Options(Vec<String>, usize),
 }
 
 impl Modal {
@@ -76,6 +78,22 @@ impl Modal {
                 }
                 _ => {}
             },
+            ModalVariant::Options(ref options, _) => {
+                // indexing starts from 1
+                match key_code {
+                    KeyCode::Char(c) => {
+                        let index: usize = c.to_string().parse::<usize>().unwrap_or(0);
+                        if index > 0 && index <= options.len() {
+                            self.status = ModalStatus::Confirmed;
+                            self.variant = ModalVariant::Options(options.to_vec(), index - 1);
+                        }
+                    }
+                    KeyCode::Esc => {
+                        self.status = ModalStatus::Refused;
+                    }
+                    _ => {}
+                }
+            }
         }
     }
 }
@@ -112,11 +130,49 @@ impl Drawable for Modal {
             ModalVariant::Question(ref message) => {
                 self.draw_question_modal(f, popup_wrapper, message);
             }
+            ModalVariant::Options(ref options, _) => {
+                self.draw_options_modal(f, popup_wrapper, options);
+            }
         }
     }
 }
 
 impl Modal {
+    fn draw_options_modal(&self, f: &mut Frame, popup_wrapper: Rect, options: &[String]) {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Fill(1),
+                Constraint::Fill(2),
+                Constraint::Fill(2),
+                Constraint::Fill(2),
+                Constraint::Fill(1),
+            ])
+            .split(popup_wrapper);
+
+        let question_wrapper = chunks[1];
+        let options_wrapper = chunks[2];
+
+        let question_text = Paragraph::new(self.message.as_str())
+            .block(Block::default())
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true });
+
+        let option_texts = options
+            .iter()
+            .enumerate()
+            .map(|(i, option)| format!("[{}]. {}", i + 1, option))
+            .map(|text| ListItem::new(Text::from(text).alignment(Alignment::Center)));
+
+        let list = List::new(option_texts);
+
+        Self::draw_modal_legend(vec![String::from("Cancel [Esc]")], chunks[3], f);
+
+        f.render_widget(Block::new().borders(Borders::all()), popup_wrapper);
+        f.render_widget(question_text, question_wrapper);
+        f.render_widget(list, options_wrapper);
+    }
+
     fn draw_error_info_modal(&self, f: &mut Frame, popup_wrapper: Rect) {
         self.draw_with_legend(f, popup_wrapper, vec!["Ok [y]".to_string()])
     }

@@ -48,6 +48,10 @@ pub fn get_bindings() -> Vec<Binding> {
             key_code: KeyCode::Char('m'),
         },
         Binding {
+            command_id: "explorer.sort_entries",
+            key_code: KeyCode::Char('s'),
+        },
+        Binding {
             command_id: "explorer.filter",
             key_code: KeyCode::Char('/'),
         },

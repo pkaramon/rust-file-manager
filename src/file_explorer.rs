@@ -28,6 +28,8 @@ pub struct FileExplorer {
     task: ExplorerModalTask,
     name_filter: String,
     name: &'static str,
+    sort_entries: Vec<SortEntry>,
+    current_sort: usize,
 }
 
 enum ExplorerModalTask {
@@ -35,6 +37,34 @@ enum ExplorerModalTask {
     MoveFile(PathBuf),
     Filter,
     Noop,
+}
+
+struct SortEntry {
+    name: String,
+    func: fn(&mut Vec<PathBuf>) -> Result<bool>,
+}
+
+fn sort_by_name(entries: &mut Vec<PathBuf>) -> Result<bool> {
+    entries.sort();
+    Ok(true)
+}
+
+fn sort_by_size(entries: &mut Vec<PathBuf>) -> Result<bool> {
+    entries.sort_by(|a, b| {
+        let a_size = fs::metadata(a).unwrap().len();
+        let b_size = fs::metadata(b).unwrap().len();
+        b_size.cmp(&a_size)
+    });
+    Ok(true)
+}
+
+fn sort_by_modified_date(entries: &mut Vec<PathBuf>) -> Result<bool> {
+    entries.sort_by(|a, b| {
+        let a_time = fs::metadata(a).unwrap().modified().unwrap();
+        let b_time = fs::metadata(b).unwrap().modified().unwrap();
+        b_time.cmp(&a_time)
+    });
+    Ok(true)
 }
 
 impl FileExplorer {
@@ -53,6 +83,21 @@ impl FileExplorer {
             task: ExplorerModalTask::Noop,
             modal: Modal::new(),
             name_filter: String::new(),
+            sort_entries: vec![
+                SortEntry {
+                    name: String::from("Name"),
+                    func: sort_by_name,
+                },
+                SortEntry {
+                    name: String::from("Size"),
+                    func: sort_by_size,
+                },
+                SortEntry {
+                    name: String::from("Modified"),
+                    func: sort_by_modified_date,
+                },
+            ],
+            current_sort: 0,
             name,
         })
     }
@@ -105,6 +150,21 @@ impl FileExplorer {
         Ok(true)
     }
 
+    pub fn sort_entries(&mut self, _: KeyCode) -> Result<bool> {
+        self.modal.open(
+            "Sort by: ".to_string(),
+            ModalVariant::Options(
+                self.sort_entries
+                    .iter()
+                    .map(|entry| entry.name.clone())
+                    .collect(),
+                0,
+            ),
+        );
+
+        Ok(true)
+    }
+
     pub fn filter(&mut self, _: KeyCode) -> Result<bool> {
         self.modal.open(
             String::from("Search: "),
@@ -135,7 +195,6 @@ impl FileExplorer {
                 return Ok(true);
             }
         }
-
         Ok(false)
     }
 
@@ -148,6 +207,9 @@ impl FileExplorer {
                 name.contains(&self.name_filter)
             })
             .collect();
+
+        (self.sort_entries[self.current_sort].func)(&mut self.entries)?;
+
         self.list_state.borrow_mut().select(Some(0));
         self.selected_index = 0;
         self.modal.is_open = false;
@@ -193,6 +255,15 @@ impl FileExplorer {
                     }
                     _ => {}
                 },
+                ModalVariant::Options(_, index) => {
+                    if index < self.sort_entries.len() {
+                        self.current_sort = index;
+                        self.refresh()?;
+                    } else {
+                        self.modal
+                            .open("Invalid option".to_string(), ModalVariant::Error);
+                    }
+                }
             },
             _ => {}
         }
@@ -326,6 +397,11 @@ impl CommandHandler for FileExplorer {
                     id: "explorer.move_current_file",
                     name: "Move file",
                     func: FileExplorer::move_current_file,
+                },
+                Command {
+                    id: "explorer.sort_entries",
+                    name: "Sort",
+                    func: FileExplorer::sort_entries,
                 },
                 Command {
                     id: "explorer.filter",
