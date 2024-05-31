@@ -1,7 +1,7 @@
 use ratatui::{layout::Rect, Frame};
 
 pub trait Drawable {
-    fn draw(&mut self, f: &mut Frame, area: Rect);
+    fn draw(&self, f: &mut Frame, area: Rect);
 }
 
 pub trait Focusable {

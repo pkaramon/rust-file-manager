@@ -7,8 +7,8 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState},
     Frame,
 };
-use std::fs;
 use std::path::PathBuf;
+use std::{cell::RefCell, fs};
 
 use crate::{
     command::{Command, CommandHandler, InputHandler},
@@ -20,7 +20,7 @@ pub struct FileExplorer {
     pub current_dir: PathBuf,
     pub selected_index: usize,
     pub entries: Vec<PathBuf>,
-    pub list_state: ListState,
+    pub list_state: RefCell<ListState>,
     is_focused: bool,
     interactive: bool,
     name: &'static str,
@@ -30,8 +30,8 @@ impl FileExplorer {
     pub fn new(name: &'static str, interactive: bool) -> Result<Self> {
         let current_dir = std::env::current_dir().unwrap();
         let entries = read_dir_entries(&current_dir)?;
-        let mut list_state = ListState::default();
-        list_state.select(Some(0));
+        let list_state = RefCell::new(ListState::default());
+        list_state.borrow_mut().select(Some(0));
         Ok(Self {
             current_dir,
             selected_index: 0,
@@ -46,7 +46,9 @@ impl FileExplorer {
     pub fn select_previous(&mut self, _: KeyCode) -> Result<bool> {
         if !self.entries.is_empty() && self.selected_index > 0 {
             self.selected_index -= 1;
-            self.list_state.select(Some(self.selected_index));
+            self.list_state
+                .borrow_mut()
+                .select(Some(self.selected_index));
         }
         Ok(true)
     }
@@ -54,7 +56,9 @@ impl FileExplorer {
     pub fn select_next(&mut self, _: KeyCode) -> Result<bool> {
         if !self.entries.is_empty() && self.selected_index < self.entries.len() - 1 {
             self.selected_index += 1;
-            self.list_state.select(Some(self.selected_index));
+            self.list_state
+                .borrow_mut()
+                .select(Some(self.selected_index));
         }
         Ok(true)
     }
@@ -86,7 +90,7 @@ impl FileExplorer {
 }
 
 impl Drawable for FileExplorer {
-    fn draw(&mut self, f: &mut Frame, area: Rect) {
+    fn draw(&self, f: &mut Frame, area: Rect) {
         let items: Vec<ListItem> = self
             .entries
             .iter()
@@ -112,7 +116,8 @@ impl Drawable for FileExplorer {
                 .highlight_symbol(">> ");
         }
 
-        f.render_stateful_widget(list, area, &mut self.list_state);
+        let mut list_state = self.list_state.borrow_mut();
+        f.render_stateful_widget(list, area, &mut *list_state);
     }
 }
 
@@ -177,7 +182,9 @@ impl Editor for FileExplorer {
         self.entries = read_dir_entries(&new_dir)?;
         self.current_dir = new_dir;
         self.selected_index = 0;
-        self.list_state.select(Some(self.selected_index));
+        self.list_state
+            .borrow_mut()
+            .select(Some(self.selected_index));
         Ok(())
     }
 }
