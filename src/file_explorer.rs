@@ -26,12 +26,14 @@ pub struct FileExplorer {
     interactive: bool,
     modal: Modal,
     task: ExplorerModalTask,
+    name_filter: String,
     name: &'static str,
 }
 
 enum ExplorerModalTask {
     DeleteFile(PathBuf),
     MoveFile(PathBuf),
+    Filter,
     Noop,
 }
 
@@ -50,6 +52,7 @@ impl FileExplorer {
             interactive,
             task: ExplorerModalTask::Noop,
             modal: Modal::new(),
+            name_filter: String::new(),
             name,
         })
     }
@@ -102,6 +105,15 @@ impl FileExplorer {
         Ok(true)
     }
 
+    pub fn filter(&mut self, _: KeyCode) -> Result<bool> {
+        self.modal.open(
+            String::from("Search: "),
+            ModalVariant::Question(String::new()),
+        );
+        self.task = ExplorerModalTask::Filter;
+        Ok(true)
+    }
+
     pub fn go_back(&mut self, _: KeyCode) -> Result<bool> {
         if let Some(parent) = self.current_dir.parent() {
             self.set_path(parent.to_path_buf())?;
@@ -128,7 +140,14 @@ impl FileExplorer {
     }
 
     fn refresh(&mut self) -> Result<()> {
-        self.entries = read_dir_entries(&self.current_dir)?;
+        self.entries = read_dir_entries(&self.current_dir)?
+            .iter()
+            .map(|entry| entry.clone())
+            .filter(|entry| {
+                let name = entry.file_name().unwrap().to_str().unwrap();
+                name.contains(&self.name_filter)
+            })
+            .collect();
         self.list_state.borrow_mut().select(Some(0));
         self.selected_index = 0;
         self.modal.is_open = false;
@@ -158,15 +177,19 @@ impl FileExplorer {
                     &_ => {}
                 },
                 ModalVariant::Info | ModalVariant::Error => self.modal.close(),
-                ModalVariant::Question(ref newpath) => match &self.task {
+                ModalVariant::Question(ref answer) => match &self.task {
                     ExplorerModalTask::MoveFile(file) => {
-                        let newpath = PathBuf::from(newpath);
+                        let newpath = PathBuf::from(answer);
                         if let Err(e) = fs::rename(file, &newpath) {
                             self.modal
                                 .open(format!("Could not move file: {}", e), ModalVariant::Error)
                         } else {
                             self.refresh()?;
                         }
+                    }
+                    ExplorerModalTask::Filter => {
+                        self.name_filter = answer.clone();
+                        self.refresh()?;
                     }
                     _ => {}
                 },
@@ -303,6 +326,11 @@ impl CommandHandler for FileExplorer {
                     id: "explorer.move_current_file",
                     name: "Move file",
                     func: FileExplorer::move_current_file,
+                },
+                Command {
+                    id: "explorer.filter",
+                    name: "Filter",
+                    func: FileExplorer::filter,
                 },
             ]
         }

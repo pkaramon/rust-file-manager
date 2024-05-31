@@ -48,6 +48,10 @@ pub fn get_bindings() -> Vec<Binding> {
             key_code: KeyCode::Char('m'),
         },
         Binding {
+            command_id: "explorer.filter",
+            key_code: KeyCode::Char('/'),
+        },
+        Binding {
             command_id: "explorer.go_back",
             key_code: KeyCode::Esc,
         },
