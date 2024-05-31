@@ -137,6 +137,16 @@ impl TextEditor {
         self.file_saved = false;
         let line: &String = &self.lines[self.cursor_position.line];
         match key_code {
+            KeyCode::Tab => {
+                self.lines[self.cursor_position.line].insert(self.cursor_position.char, ' ');
+                self.lines[self.cursor_position.line].insert(self.cursor_position.char, ' ');
+                self.lines[self.cursor_position.line].insert(self.cursor_position.char, ' ');
+                self.lines[self.cursor_position.line].insert(self.cursor_position.char, ' ');
+                self.next_char();
+                self.next_char();
+                self.next_char();
+                self.next_char();
+            }
             KeyCode::Char(c) => {
                 self.lines[self.cursor_position.line].insert(self.cursor_position.char, c);
                 self.next_char();
@@ -368,6 +378,7 @@ fn get_insertable_key_codes() -> Vec<KeyCode> {
     vec.push(KeyCode::Backspace);
     vec.push(KeyCode::Delete);
     vec.push(KeyCode::Enter);
+    vec.push(KeyCode::Tab);
     vec
 }
 
@@ -440,9 +451,8 @@ impl Editor for TextEditor {
     fn set_path(&mut self, path: PathBuf) -> Result<()> {
         self.file = path;
 
-        let text = fs::read_to_string(&self.file).context("Binary file")?;
-        self.lines = text.split("\n").map(|str| String::from(str)).collect();
-        let text = fs::read_to_string(&self.file).context("Unable to read file")?;
+        let mut text = fs::read_to_string(&self.file).context("Unable to read file")?;
+        text = text.replace("\t", "    ");
         self.lines = text.split("\n").map(|str| String::from(str)).collect();
         self.cursor_position = CursorPosition::new();
         self.file_saved = true;
