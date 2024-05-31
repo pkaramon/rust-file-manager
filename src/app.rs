@@ -174,7 +174,10 @@ impl InputHandler for App {
 
         if editor.is_focused() {
             if editor.modal_open() {
-                captured = self.go_back(key_code);
+                captured |= self.provide_editor_mut().handle_input(key_code);
+                if !captured {
+                    self.go_back(key_code);
+                }
             } else {
                 captured |= self.provide_editor_mut().handle_input(key_code);
             }
