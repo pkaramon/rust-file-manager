@@ -26,52 +26,44 @@ pub trait Editor: Drawable + Focusable + InputHandler {
 }
 
 impl EditorEnum {
-    pub fn set_path(&mut self, path: PathBuf) -> Result<()> {
+    pub fn get_editor_mut(&mut self) -> &mut dyn Editor {
         match self {
-            EditorEnum::TextEditor(editor) => editor.set_path(path),
-            EditorEnum::PreviewExplorer(editor) => editor.set_path(path),
-            EditorEnum::NullEdtior(editor) => editor.set_path(path),
+            EditorEnum::TextEditor(editor) => editor,
+            EditorEnum::PreviewExplorer(editor) => editor,
+            EditorEnum::NullEdtior(editor) => editor,
         }
+    }
+
+    pub fn get_editor(&self) -> &dyn Editor {
+        match self {
+            EditorEnum::TextEditor(editor) => editor,
+            EditorEnum::PreviewExplorer(editor) => editor,
+            EditorEnum::NullEdtior(editor) => editor,
+        }
+    }
+
+    pub fn set_path(&mut self, path: PathBuf) -> Result<()> {
+        self.get_editor_mut().set_path(path)
     }
 
     pub fn draw(&self, f: &mut Frame, area: Rect) {
-        match self {
-            EditorEnum::TextEditor(editor) => editor.draw(f, area),
-            EditorEnum::PreviewExplorer(editor) => editor.draw(f, area),
-            EditorEnum::NullEdtior(editor) => editor.draw(f, area),
-        }
+        self.get_editor().draw(f, area)
     }
 
     pub fn is_focused(&self) -> bool {
-        match self {
-            EditorEnum::TextEditor(editor) => editor.is_focused(),
-            EditorEnum::PreviewExplorer(editor) => editor.is_focused(),
-            EditorEnum::NullEdtior(editor) => editor.is_focused(),
-        }
+        self.get_editor().is_focused()
     }
 
     pub fn focus(&mut self) {
-        match self {
-            EditorEnum::TextEditor(editor) => editor.focus(),
-            EditorEnum::PreviewExplorer(editor) => editor.focus(),
-            EditorEnum::NullEdtior(editor) => editor.focus(),
-        }
+        self.get_editor_mut().focus()
     }
 
     pub fn unfocus(&mut self) {
-        match self {
-            EditorEnum::TextEditor(editor) => editor.unfocus(),
-            EditorEnum::PreviewExplorer(editor) => editor.unfocus(),
-            EditorEnum::NullEdtior(editor) => editor.unfocus(),
-        }
+        self.get_editor_mut().unfocus()
     }
 
     pub fn handle_input(&mut self, key_code: KeyCode) -> bool {
-        match self {
-            EditorEnum::TextEditor(editor) => editor.handle_input(key_code),
-            EditorEnum::PreviewExplorer(editor) => editor.handle_input(key_code),
-            EditorEnum::NullEdtior(editor) => editor.handle_input(key_code),
-        }
+        self.get_editor_mut().handle_input(key_code)
     }
 
     pub fn get_commands_data(&self) -> Vec<(&'static str, &'static str)> {
