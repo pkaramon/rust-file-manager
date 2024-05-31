@@ -43,49 +43,45 @@ impl FileExplorer {
         })
     }
 
-    pub fn select_previous(&mut self, _: KeyCode) -> Result<bool> {
+    pub fn select_previous(&mut self, _: KeyCode) -> bool {
         if !self.entries.is_empty() && self.selected_index > 0 {
             self.selected_index -= 1;
             self.list_state
                 .borrow_mut()
                 .select(Some(self.selected_index));
         }
-        Ok(true)
+        true
     }
 
-    pub fn select_next(&mut self, _: KeyCode) -> Result<bool> {
+    pub fn select_next(&mut self, _: KeyCode) -> bool {
         if !self.entries.is_empty() && self.selected_index < self.entries.len() - 1 {
             self.selected_index += 1;
             self.list_state
                 .borrow_mut()
                 .select(Some(self.selected_index));
         }
-        Ok(true)
+        true
     }
 
-    pub fn go_back(&mut self, _: KeyCode) -> Result<bool> {
+    pub fn go_back(&mut self, _: KeyCode) -> bool {
         if let Some(parent) = self.current_dir.parent() {
-            self.set_path(parent.to_path_buf())?;
+            let _ = self.set_path(parent.to_path_buf());
         }
-        Ok(true)
+        true
     }
 
-    pub fn get_selected_file(&self) -> Result<PathBuf> {
-        self.entries
-            .get(self.selected_index)
-            .cloned()
-            .context("Could not get selected file")
+    pub fn get_selected_file(&self) -> Option<PathBuf> {
+        self.entries.get(self.selected_index).cloned()
     }
 
-    pub fn open_selected_file(&mut self, _: KeyCode) -> Result<bool> {
-        if let Ok(selected_file) = self.get_selected_file() {
+    pub fn open_selected_file(&mut self, _: KeyCode) -> bool {
+        if let Some(selected_file) = self.get_selected_file() {
             if selected_file.is_dir() {
                 let _ = self.set_path(selected_file);
-                return Ok(true);
+                return true;
             }
         }
-
-        Ok(false)
+        false
     }
 }
 
@@ -172,7 +168,7 @@ impl CommandHandler for FileExplorer {
 }
 
 impl InputHandler for FileExplorer {
-    fn handle_input(&mut self, key_code: KeyCode) -> Result<bool> {
+    fn handle_input(&mut self, key_code: KeyCode) -> bool {
         self.handle_command(key_code)
     }
 }

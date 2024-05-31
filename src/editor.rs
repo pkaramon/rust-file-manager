@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
-use anyhow::Result;
+use anyhow::{Ok, Result};
 use crossterm::event::KeyCode;
-use ratatui::{layout::Rect, Frame};
+use ratatui::{layout::Rect, widgets::Block, Frame};
 
 use crate::{
     command::{CommandHandler, InputHandler},
@@ -14,6 +14,7 @@ use crate::{
 pub enum EditorEnum {
     TextEditor(TextEditor),
     PreviewExplorer(FileExplorer),
+    NullEdtior(NullEdtior),
 }
 
 pub trait Editor: Drawable + Focusable + InputHandler {
@@ -27,13 +28,15 @@ impl EditorEnum {
         match self {
             EditorEnum::TextEditor(editor) => editor.set_path(path),
             EditorEnum::PreviewExplorer(editor) => editor.set_path(path),
+            EditorEnum::NullEdtior(editor) => editor.set_path(path),
         }
     }
 
-    pub fn draw(&mut self, f: &mut Frame, area: Rect) {
+    pub fn draw(&self, f: &mut Frame, area: Rect) {
         match self {
             EditorEnum::TextEditor(editor) => editor.draw(f, area),
             EditorEnum::PreviewExplorer(editor) => editor.draw(f, area),
+            EditorEnum::NullEdtior(editor) => editor.draw(f, area),
         }
     }
 
@@ -41,6 +44,7 @@ impl EditorEnum {
         match self {
             EditorEnum::TextEditor(editor) => editor.is_focused(),
             EditorEnum::PreviewExplorer(editor) => editor.is_focused(),
+            EditorEnum::NullEdtior(editor) => editor.is_focused(),
         }
     }
 
@@ -48,6 +52,7 @@ impl EditorEnum {
         match self {
             EditorEnum::TextEditor(editor) => editor.focus(),
             EditorEnum::PreviewExplorer(editor) => editor.focus(),
+            EditorEnum::NullEdtior(editor) => editor.focus(),
         }
     }
 
@@ -55,13 +60,15 @@ impl EditorEnum {
         match self {
             EditorEnum::TextEditor(editor) => editor.unfocus(),
             EditorEnum::PreviewExplorer(editor) => editor.unfocus(),
+            EditorEnum::NullEdtior(editor) => editor.unfocus(),
         }
     }
 
-    pub fn handle_input(&mut self, key_code: KeyCode) -> Result<bool> {
+    pub fn handle_input(&mut self, key_code: KeyCode) -> bool {
         match self {
             EditorEnum::TextEditor(editor) => editor.handle_input(key_code),
             EditorEnum::PreviewExplorer(editor) => editor.handle_input(key_code),
+            EditorEnum::NullEdtior(editor) => editor.handle_input(key_code),
         }
     }
 
@@ -77,6 +84,7 @@ impl EditorEnum {
                 .iter()
                 .map(|c| (c.id, c.name))
                 .collect(),
+            EditorEnum::NullEdtior(_) => vec![],
         }
     }
 
@@ -91,6 +99,7 @@ impl EditorEnum {
         match self {
             EditorEnum::TextEditor(editor) => editor.confirm_modal(),
             EditorEnum::PreviewExplorer(editor) => editor.confirm_modal(),
+            EditorEnum::NullEdtior(editor) => editor.confirm_modal(),
         }
     }
 
@@ -98,6 +107,39 @@ impl EditorEnum {
         match self {
             EditorEnum::TextEditor(editor) => editor.refuse_modal(),
             EditorEnum::PreviewExplorer(editor) => editor.refuse_modal(),
+            EditorEnum::NullEdtior(editor) => editor.refuse_modal(),
         }
+    }
+}
+
+pub struct NullEdtior {}
+
+impl Drawable for NullEdtior {
+    fn draw(&self, f: &mut Frame, area: Rect) {
+        let block = Block::bordered();
+
+        f.render_widget(block, area);
+    }
+}
+
+impl InputHandler for NullEdtior {
+    fn handle_input(&mut self, _: KeyCode) -> bool {
+        false
+    }
+}
+
+impl Focusable for NullEdtior {
+    fn focus(&mut self) {}
+
+    fn unfocus(&mut self) {}
+
+    fn is_focused(&self) -> bool {
+        false
+    }
+}
+
+impl Editor for NullEdtior {
+    fn set_path(&mut self, _: PathBuf) -> Result<()> {
+        Ok(())
     }
 }

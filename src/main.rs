@@ -42,14 +42,12 @@ fn main() -> Result<()> {
     let mut app = App::new()?;
 
     loop {
-        let _ = terminal.draw(|f| {
-            let _ = app.draw(f);
-        });
+        let _ = terminal.draw(|f| app.draw(f));
 
         if event::poll(std::time::Duration::from_millis(16))? {
             if let event::Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press {
-                    let _ = app.handle_input(key.code);
+                    app.handle_input(key.code);
                 }
             }
         }

@@ -119,17 +119,17 @@ impl TextEditor {
         self.mode = Mode::Edit;
     }
 
-    pub fn go_back(&mut self, _: KeyCode) -> Result<bool> {
+    pub fn go_back(&mut self, _: KeyCode) -> bool {
         if self.mode == Mode::View {
             if self.file_saved {
-                Ok(false)
+                false
             } else {
                 self.modal_open = true;
-                Ok(true)
+                true
             }
         } else {
             self.mode = Mode::View;
-            Ok(true)
+            true
         }
     }
 
@@ -387,14 +387,14 @@ fn is_insertable_key_code(key_code: KeyCode) -> bool {
 }
 
 impl InputHandler for TextEditor {
-    fn handle_input(&mut self, key_code: KeyCode) -> Result<bool> {
+    fn handle_input(&mut self, key_code: KeyCode) -> bool {
         if self.modal_open {
-            Ok(false)
+            false
         } else {
             match self.mode {
                 Mode::Edit if is_insertable_key_code(key_code) => {
                     self.insert(key_code);
-                    Ok(true)
+                    true
                 }
                 Mode::View | Mode::Edit => self.handle_command(key_code),
             }
