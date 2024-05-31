@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use anyhow::Result;
 use crossterm::event::KeyCode;
 use ratatui::{layout::Rect, Frame};
 
@@ -16,13 +17,13 @@ pub enum EditorEnum {
 }
 
 pub trait Editor: Drawable + Focusable + InputHandler {
-    fn set_path(&mut self, path: PathBuf);
+    fn set_path(&mut self, path: PathBuf) -> Result<()>;
     fn confirm_modal(&mut self) {}
     fn refuse_modal(&mut self) {}
 }
 
 impl EditorEnum {
-    pub fn set_path(&mut self, path: PathBuf) {
+    pub fn set_path(&mut self, path: PathBuf) -> Result<()> {
         match self {
             EditorEnum::TextEditor(editor) => editor.set_path(path),
             EditorEnum::PreviewExplorer(editor) => editor.set_path(path),
@@ -57,7 +58,7 @@ impl EditorEnum {
         }
     }
 
-    pub fn handle_input(&mut self, key_code: KeyCode) -> bool {
+    pub fn handle_input(&mut self, key_code: KeyCode) -> Result<bool> {
         match self {
             EditorEnum::TextEditor(editor) => editor.handle_input(key_code),
             EditorEnum::PreviewExplorer(editor) => editor.handle_input(key_code),

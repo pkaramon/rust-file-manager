@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use crossterm::event::KeyCode;
 use ratatui::{
     layout::Rect,
@@ -26,12 +27,12 @@ pub struct FileExplorer {
 }
 
 impl FileExplorer {
-    pub fn new(name: &'static str, interactive: bool) -> Self {
+    pub fn new(name: &'static str, interactive: bool) -> Result<Self> {
         let current_dir = std::env::current_dir().unwrap();
-        let entries = read_dir_entries(&current_dir);
+        let entries = read_dir_entries(&current_dir)?;
         let mut list_state = ListState::default();
         list_state.select(Some(0));
-        Self {
+        Ok(Self {
             current_dir,
             selected_index: 0,
             entries,
@@ -39,44 +40,48 @@ impl FileExplorer {
             is_focused: false,
             interactive,
             name,
-        }
+        })
     }
 
-    pub fn select_previous(&mut self, _: KeyCode) -> bool {
-        if self.selected_index > 0 {
+    pub fn select_previous(&mut self, _: KeyCode) -> Result<bool> {
+        if !self.entries.is_empty() && self.selected_index > 0 {
             self.selected_index -= 1;
             self.list_state.select(Some(self.selected_index));
         }
-        true
+        Ok(true)
     }
 
-    pub fn select_next(&mut self, _: KeyCode) -> bool {
-        if self.selected_index < self.entries.len() - 1 {
+    pub fn select_next(&mut self, _: KeyCode) -> Result<bool> {
+        if !self.entries.is_empty() && self.selected_index < self.entries.len() - 1 {
             self.selected_index += 1;
             self.list_state.select(Some(self.selected_index));
         }
-        true
+        Ok(true)
     }
 
-    pub fn go_back(&mut self, _: KeyCode) -> bool {
+    pub fn go_back(&mut self, _: KeyCode) -> Result<bool> {
         if let Some(parent) = self.current_dir.parent() {
-            self.set_path(parent.to_path_buf());
+            self.set_path(parent.to_path_buf())?;
         }
-        true
+        Ok(true)
     }
 
-    pub fn get_selected_file(&self) -> PathBuf {
-        self.entries[self.selected_index].clone()
+    pub fn get_selected_file(&self) -> Result<PathBuf> {
+        self.entries
+            .get(self.selected_index)
+            .cloned()
+            .context("Could not get selected file")
     }
 
-    pub fn open_selected_file(&mut self, _: KeyCode) -> bool {
-        let selected_file = self.get_selected_file();
-        if selected_file.is_dir() {
-            self.set_path(selected_file);
-            true
-        } else {
-            false
+    pub fn open_selected_file(&mut self, _: KeyCode) -> Result<bool> {
+        if let Ok(selected_file) = self.get_selected_file() {
+            if selected_file.is_dir() {
+                let _ = self.set_path(selected_file);
+                return Ok(true);
+            }
         }
+
+        Ok(false)
     }
 }
 
@@ -162,25 +167,27 @@ impl CommandHandler for FileExplorer {
 }
 
 impl InputHandler for FileExplorer {
-    fn handle_input(&mut self, key_code: KeyCode) -> bool {
+    fn handle_input(&mut self, key_code: KeyCode) -> Result<bool> {
         self.handle_command(key_code)
     }
 }
 
 impl Editor for FileExplorer {
-    fn set_path(&mut self, new_dir: PathBuf) {
+    fn set_path(&mut self, new_dir: PathBuf) -> Result<()> {
+        self.entries = read_dir_entries(&new_dir)?;
         self.current_dir = new_dir;
-        self.entries = read_dir_entries(&self.current_dir);
         self.selected_index = 0;
         self.list_state.select(Some(self.selected_index));
+        Ok(())
     }
 }
 
-fn read_dir_entries(dir: &PathBuf) -> Vec<PathBuf> {
+fn read_dir_entries(dir: &PathBuf) -> Result<Vec<PathBuf>> {
     let mut entries: Vec<PathBuf> = fs::read_dir(dir)
-        .unwrap()
+        .context("Could not read directory entries")?
+        .filter(|res| res.is_ok())
         .map(|res| res.unwrap().path())
         .collect();
     entries.sort();
-    entries
+    Ok(entries)
 }
