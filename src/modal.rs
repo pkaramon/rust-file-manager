@@ -43,7 +43,6 @@ impl Modal {
 
 impl Drawable for Modal {
     fn draw(&self, f: &mut Frame, area: Rect) {
-        // self.variant_trait.draw(f, area);
         if !self.state.is_open {
             return;
         }

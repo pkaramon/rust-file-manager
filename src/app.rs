@@ -20,7 +20,7 @@ pub struct App {
     pub should_stop: bool,
 }
 
-fn log(text: &str) -> Result<()> {
+pub fn log(text: &str) -> Result<()> {
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)

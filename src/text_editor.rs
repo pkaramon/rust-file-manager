@@ -68,6 +68,11 @@ impl TextEditor {
 
             if self.cursor_position.char < line.len() {
                 self.cursor_position.char += 1;
+            } else {
+                if self.cursor_position.line + 1 < self.lines.len() {
+                    self.cursor_position.line += 1;
+                    self.cursor_position.char = 0;
+                }
             }
         }
     }
@@ -76,6 +81,12 @@ impl TextEditor {
         if self.lines.len() > 0 {
             if self.cursor_position.char > 0 {
                 self.cursor_position.char -= 1;
+            } else {
+                if self.cursor_position.line > 0 {
+                    self.cursor_position.line -= 1;
+                    let line = &self.lines[self.cursor_position.line];
+                    self.cursor_position.char = line.len();
+                }
             }
         }
     }
@@ -86,8 +97,8 @@ impl TextEditor {
 
             let line = &self.lines[self.cursor_position.line];
             if line.len() > 0 {
-                if self.cursor_position.char > line.len() - 1 {
-                    self.cursor_position.char = line.len() - 1;
+                if self.cursor_position.char > line.len() {
+                    self.cursor_position.char = line.len();
                 }
             } else {
                 self.cursor_position.char = 0;
@@ -350,9 +361,26 @@ impl Drawable for TextEditor {
                 })
                 .collect();
 
-            let p = Paragraph::new(lines)
+            let mut p = Paragraph::new(lines)
                 .block(block)
                 .style(Style::new().white().on_black());
+
+            let x_margin = 2u16;
+            let y_margin = 2u16;
+
+            let x_scroll = if self.cursor_position.char as u16 + 1 + x_margin >= area.width {
+                self.cursor_position.char as u16 + 1 + x_margin - area.width
+            } else {
+                0
+            };
+
+            let y_scroll = if self.cursor_position.line as u16 + 1 + y_margin >= area.height {
+                self.cursor_position.line as u16 + 1 + y_margin - area.height
+            } else {
+                0
+            };
+
+            p = p.scroll((y_scroll, x_scroll));
 
             f.render_widget(p, area);
         }
@@ -459,7 +487,7 @@ impl Editor for TextEditor {
         self.file = path;
 
         let mut text = fs::read_to_string(&self.file).context("Unable to read file")?;
-        text = text.replace("\t", "    ");
+        text = text.replace("\t", "    ").replace("\r", "");
         self.lines = text.split("\n").map(|str| String::from(str)).collect();
         self.cursor_position = CursorPosition::new();
         self.file_saved = true;
