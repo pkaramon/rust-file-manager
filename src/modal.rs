@@ -18,23 +18,12 @@ pub struct Modal {
 
 pub struct ModalState {
     pub is_open: bool,
-    pub status: ModalStatus,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ModalStatus {
-    Confirmed,
-    Refused,
-    Waiting,
 }
 
 impl Modal {
     pub fn new(variant: Box<dyn ModalVariant>) -> Modal {
         Self {
-            state: ModalState {
-                is_open: true,
-                status: ModalStatus::Waiting,
-            },
+            state: ModalState { is_open: true },
             variant_trait: variant,
         }
     }
@@ -45,7 +34,6 @@ impl Modal {
 
     pub fn close(&mut self) {
         self.state.is_open = false;
-        self.state.status = ModalStatus::Waiting;
     }
 
     pub fn handle_input(&mut self, key_code: KeyCode) {

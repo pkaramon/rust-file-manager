@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::modal::{ModalState, ModalStatus, ModalVariant};
+use crate::modal::{ModalState, ModalVariant};
 
 pub struct InfoVariant {
     message: String,
@@ -22,7 +22,6 @@ impl ModalVariant for InfoVariant {
     fn handle_input(&mut self, state: &mut ModalState, key_code: KeyCode) {
         match key_code {
             KeyCode::Char('y') => {
-                state.status = ModalStatus::Confirmed;
                 state.is_open = false;
             }
             _ => {}
@@ -60,14 +59,12 @@ impl ModalVariant for QuestionVariant {
                 self.answer.push(c);
             }
             KeyCode::Enter => {
-                state.status = ModalStatus::Confirmed;
                 state.is_open = false;
 
                 let on_confirm = &mut self.on_confirm;
                 (on_confirm)(self.answer.clone())
             }
             KeyCode::Esc => {
-                state.status = ModalStatus::Refused;
                 state.is_open = false;
             }
             _ => {}
@@ -140,12 +137,10 @@ impl ModalVariant for ConfirmationVariant {
     fn handle_input(&mut self, state: &mut ModalState, key_code: KeyCode) {
         match key_code {
             KeyCode::Char('y') => {
-                state.status = ModalStatus::Confirmed;
                 state.is_open = false;
                 (self.on_confirm)(());
             }
             KeyCode::Char('n') => {
-                state.status = ModalStatus::Refused;
                 state.is_open = false;
             }
             _ => {}
@@ -186,14 +181,12 @@ impl ModalVariant for OptionsVariant {
             KeyCode::Char(c) => {
                 let index: usize = c.to_string().parse::<usize>().unwrap_or(0);
                 if index > 0 && index <= self.options.len() {
-                    state.status = ModalStatus::Confirmed;
                     state.is_open = false;
                     self.selected_index = index - 1;
                     (self.on_press)(self.selected_index);
                 }
             }
             KeyCode::Esc => {
-                state.status = ModalStatus::Refused;
                 state.is_open = false;
             }
             _ => {}
