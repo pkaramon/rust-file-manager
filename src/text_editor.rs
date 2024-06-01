@@ -287,9 +287,9 @@ impl TextEditor {
         let tmp = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Percentage(40),
-                Constraint::Percentage(20),
-                Constraint::Percentage(40),
+                Constraint::Fill(1),
+                Constraint::Length(5),
+                Constraint::Fill(1),
             ])
             .split(area);
 
@@ -304,23 +304,15 @@ impl TextEditor {
 
         let v_segments = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Percentage(10),
-                Constraint::Percentage(30),
-                Constraint::Percentage(10),
-                Constraint::Percentage(30),
-            ])
+            .constraints([Constraint::Length(3), Constraint::Length(2)])
             .split(popup_wrapper);
 
-        let question_wrapper = v_segments[1];
-
-        let spacer_block = Block::new().borders(Borders::LEFT | Borders::RIGHT);
-        let spacer = v_segments[2];
+        let question_wrapper = v_segments[0];
 
         let answer_segments = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(v_segments[3]);
+            .split(v_segments[1]);
 
         let yes_wrapper = answer_segments[0];
         let no_wrapper = answer_segments[1];
@@ -337,7 +329,6 @@ impl TextEditor {
         f.render_widget(question, question_wrapper);
         f.render_widget(yes, yes_wrapper);
         f.render_widget(no, no_wrapper);
-        f.render_widget(spacer_block, spacer);
     }
 }
 
