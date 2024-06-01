@@ -89,6 +89,8 @@ impl App {
                 }
             } else {
                 self.info_message = None;
+                let path = self.explorer.get_selected_file().unwrap().clone();
+                let _ = self.provide_editor_mut().set_path(path);
             }
         }
     }
