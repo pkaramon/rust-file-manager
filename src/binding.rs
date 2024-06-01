@@ -21,15 +21,35 @@ pub fn get_bindings() -> Vec<Binding> {
         },
         Binding {
             command_id: "explorer.select_previous_file",
-            key_code: KeyCode::Up,
+            key_code: KeyCode::Char('k'),
         },
         Binding {
             command_id: "explorer.select_next_file",
-            key_code: KeyCode::Down,
+            key_code: KeyCode::Char('j'),
         },
         Binding {
             command_id: "explorer.open_selected_file",
             key_code: KeyCode::Enter,
+        },
+        Binding {
+            command_id: "explorer.delete_current_file",
+            key_code: KeyCode::Char('d'),
+        },
+        Binding {
+            command_id: "explorer.move_current_file",
+            key_code: KeyCode::Char('m'),
+        },
+        Binding {
+            command_id: "explorer.sort_entries",
+            key_code: KeyCode::Char('s'),
+        },
+        Binding {
+            command_id: "explorer.create_file",
+            key_code: KeyCode::Char('c'),
+        },
+        Binding {
+            command_id: "explorer.filter",
+            key_code: KeyCode::Char('/'),
         },
         Binding {
             command_id: "explorer.go_back",

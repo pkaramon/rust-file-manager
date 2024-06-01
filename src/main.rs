@@ -4,6 +4,9 @@ mod command;
 mod editor;
 mod file_explorer;
 mod legend;
+mod modal;
+mod modal_variants;
+mod sort_entries;
 mod text_editor;
 mod window;
 
