@@ -119,17 +119,17 @@ impl TextEditor {
         self.mode = Mode::Edit;
     }
 
-    pub fn go_back(&mut self, _: KeyCode) -> Result<bool> {
+    pub fn go_back(&mut self, _: KeyCode) -> bool {
         if self.mode == Mode::View {
             if self.file_saved {
-                Ok(false)
+                false
             } else {
                 self.modal_open = true;
-                Ok(true)
+                true
             }
         } else {
             self.mode = Mode::View;
-            Ok(true)
+            true
         }
     }
 
@@ -137,6 +137,16 @@ impl TextEditor {
         self.file_saved = false;
         let line: &String = &self.lines[self.cursor_position.line];
         match key_code {
+            KeyCode::Tab => {
+                self.lines[self.cursor_position.line].insert(self.cursor_position.char, ' ');
+                self.lines[self.cursor_position.line].insert(self.cursor_position.char, ' ');
+                self.lines[self.cursor_position.line].insert(self.cursor_position.char, ' ');
+                self.lines[self.cursor_position.line].insert(self.cursor_position.char, ' ');
+                self.next_char();
+                self.next_char();
+                self.next_char();
+                self.next_char();
+            }
             KeyCode::Char(c) => {
                 self.lines[self.cursor_position.line].insert(self.cursor_position.char, c);
                 self.next_char();
@@ -368,6 +378,7 @@ fn get_insertable_key_codes() -> Vec<KeyCode> {
     vec.push(KeyCode::Backspace);
     vec.push(KeyCode::Delete);
     vec.push(KeyCode::Enter);
+    vec.push(KeyCode::Tab);
     vec
 }
 
@@ -376,14 +387,21 @@ fn is_insertable_key_code(key_code: KeyCode) -> bool {
 }
 
 impl InputHandler for TextEditor {
-    fn handle_input(&mut self, key_code: KeyCode) -> Result<bool> {
+    fn handle_input(&mut self, key_code: KeyCode) -> bool {
         if self.modal_open {
-            Ok(false)
+            if key_code == KeyCode::Char('y') {
+                self.modal_open = false;
+                self.save();
+            } else if key_code == KeyCode::Char('n') {
+                self.modal_open = false;
+                let _ = self.set_path(self.file.clone());
+            }
+            false
         } else {
             match self.mode {
                 Mode::Edit if is_insertable_key_code(key_code) => {
                     self.insert(key_code);
-                    Ok(true)
+                    true
                 }
                 Mode::View | Mode::Edit => self.handle_command(key_code),
             }
@@ -440,23 +458,12 @@ impl Editor for TextEditor {
     fn set_path(&mut self, path: PathBuf) -> Result<()> {
         self.file = path;
 
-        let text = fs::read_to_string(&self.file).context("Binary file")?;
-        self.lines = text.split("\n").map(|str| String::from(str)).collect();
-        let text = fs::read_to_string(&self.file).context("Unable to read file")?;
+        let mut text = fs::read_to_string(&self.file).context("Unable to read file")?;
+        text = text.replace("\t", "    ");
         self.lines = text.split("\n").map(|str| String::from(str)).collect();
         self.cursor_position = CursorPosition::new();
         self.file_saved = true;
 
         Ok(())
-    }
-
-    fn confirm_modal(&mut self) {
-        self.modal_open = false;
-        self.save();
-    }
-
-    fn refuse_modal(&mut self) {
-        self.modal_open = false;
-        let _ = self.set_path(self.file.clone());
     }
 }

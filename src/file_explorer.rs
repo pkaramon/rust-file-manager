@@ -75,29 +75,28 @@ impl FileExplorer {
         })
     }
 
-    pub fn select_previous(&mut self, _: KeyCode) -> Result<bool> {
+    pub fn select_previous(&mut self, _: KeyCode) -> bool {
         if !self.entries.is_empty() && self.selected_index > 0 {
             self.selected_index -= 1;
             self.list_state
                 .borrow_mut()
                 .select(Some(self.selected_index));
         }
-        Ok(true)
+        true
     }
 
-    pub fn select_next(&mut self, _: KeyCode) -> Result<bool> {
+    pub fn select_next(&mut self, _: KeyCode) -> bool {
         if !self.entries.is_empty() && self.selected_index < self.entries.len() - 1 {
             self.selected_index += 1;
             self.list_state
                 .borrow_mut()
                 .select(Some(self.selected_index));
         }
-
-        Ok(true)
+        true
     }
 
-    pub fn prompt_for_delete_current_file(&mut self, _: KeyCode) -> Result<bool> {
-        if let Ok(selected_file) = self.get_selected_file() {
+    pub fn prompt_for_delete_current_file(&mut self, _: KeyCode) -> bool {
+        if let Some(selected_file) = self.get_selected_file() {
             let sender = self.sender.clone();
             self.modal = Modal::new(Box::new(ConfirmationVariant::new(
                 format!("Delete file: {}?", selected_file.to_str().unwrap()),
@@ -110,29 +109,28 @@ impl FileExplorer {
         } else {
             self.open_info_modal("Selected file is invalid".to_string());
         }
-        Ok(true)
+        true
     }
 
-    pub fn prompt_for_move_file(&mut self, _: KeyCode) -> Result<bool> {
-        if let Ok(selected_file) = self.get_selected_file() {
+    pub fn prompt_for_move_file(&mut self, _: KeyCode) -> bool {
+        if let Some(selected_file) = self.get_selected_file() {
             let sender = self.sender.clone();
             self.modal = Modal::new(Box::new(QuestionVariant::new(
                 format!("Move file: {} to?", selected_file.to_str().unwrap()),
                 String::from(selected_file.to_str().unwrap()),
                 Box::new(move |answer| {
-                    // Add 'move' keyword here
                     sender
                         .send(ExplorerTask::MoveFile(selected_file.clone(), answer))
                         .unwrap();
                 }),
             )));
         } else {
-            self.open_info_modal("Selected file is invalid".to_string())
+            self.open_info_modal("Selected file is invalid".to_string());
         }
-        Ok(true)
+        true
     }
 
-    pub fn prompt_for_sorting_criterion(&mut self, _: KeyCode) -> Result<bool> {
+    pub fn prompt_for_sorting_criterion(&mut self, _: KeyCode) -> bool {
         let sender = self.sender.clone();
         self.modal = Modal::new(Box::new(OptionsVariant::new(
             "Sort by: ".to_string(),
@@ -145,10 +143,10 @@ impl FileExplorer {
             }),
         )));
 
-        Ok(true)
+        true
     }
 
-    pub fn prompt_for_new_file(&mut self, _: KeyCode) -> Result<bool> {
+    pub fn prompt_for_new_file(&mut self, _: KeyCode) -> bool {
         let sender = self.sender.clone();
         self.modal = Modal::new(Box::new(QuestionVariant::new(
             String::from("Create file:"),
@@ -158,10 +156,10 @@ impl FileExplorer {
             }),
         )));
 
-        Ok(true)
+        true
     }
 
-    pub fn prompt_for_new_filter(&mut self, _: KeyCode) -> Result<bool> {
+    pub fn prompt_for_new_filter(&mut self, _: KeyCode) -> bool {
         let sender = self.sender.clone();
         self.modal = Modal::new(Box::new(QuestionVariant::new(
             String::from("Filter: "),
@@ -171,35 +169,32 @@ impl FileExplorer {
             }),
         )));
 
-        Ok(true)
+        true
     }
 
-    pub fn go_back(&mut self, _: KeyCode) -> Result<bool> {
+    pub fn go_back(&mut self, _: KeyCode) -> bool {
         if let Some(parent) = self.current_dir.parent() {
-            self.set_path(parent.to_path_buf())?;
+            let _ = self.set_path(parent.to_path_buf());
         }
-        Ok(true)
+        true
     }
 
     fn open_info_modal(&mut self, message: String) {
         self.modal = Modal::new(Box::new(InfoVariant::new(message)));
     }
 
-    pub fn get_selected_file(&self) -> Result<PathBuf> {
-        self.entries
-            .get(self.selected_index)
-            .cloned()
-            .context("Could not get selected file")
+    pub fn get_selected_file(&self) -> Option<PathBuf> {
+        self.entries.get(self.selected_index).cloned()
     }
 
-    pub fn open_selected_file(&mut self, _: KeyCode) -> Result<bool> {
-        if let Ok(selected_file) = self.get_selected_file() {
+    pub fn open_selected_file(&mut self, _: KeyCode) -> bool {
+        if let Some(selected_file) = self.get_selected_file() {
             if selected_file.is_dir() {
                 let _ = self.set_path(selected_file);
-                return Ok(true);
+                return true;
             }
         }
-        Ok(false)
+        false
     }
 
     fn refresh(&mut self) -> Result<()> {
@@ -315,15 +310,15 @@ impl Focusable for FileExplorer {
 }
 
 impl InputHandler for FileExplorer {
-    fn handle_input(&mut self, key_code: KeyCode) -> Result<bool> {
+    fn handle_input(&mut self, key_code: KeyCode) -> bool {
         if self.modal.is_open() {
             self.modal.handle_input(key_code);
             if let Ok(task) = self.receiver.try_recv() {
-                self.dispatch_on_task(task)?;
+                let _ = self.dispatch_on_task(task);
             }
-            return Ok(true);
+            true
         } else {
-            return Ok(self.handle_command(key_code)?);
+            self.handle_command(key_code)
         }
     }
 }

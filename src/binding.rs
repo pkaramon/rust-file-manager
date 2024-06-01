@@ -21,14 +21,6 @@ pub fn get_bindings() -> Vec<Binding> {
         },
         Binding {
             command_id: "explorer.select_previous_file",
-            key_code: KeyCode::Up,
-        },
-        Binding {
-            command_id: "explorer.select_next_file",
-            key_code: KeyCode::Down,
-        },
-        Binding {
-            command_id: "explorer.select_previous_file",
             key_code: KeyCode::Char('k'),
         },
         Binding {
