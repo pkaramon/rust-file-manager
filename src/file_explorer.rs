@@ -8,12 +8,18 @@ use ratatui::{
     Frame,
 };
 use std::path::PathBuf;
-use std::{cell::RefCell, fs};
+use std::{
+    cell::RefCell,
+    fs,
+    sync::mpsc::{channel, Receiver, Sender},
+};
 
 use crate::{
     command::{Command, CommandHandler, InputHandler},
     editor::Editor,
-    explorer_modal::{Modal, ModalStatus, ModalVariant},
+    modal::Modal,
+    modal_variants::{ConfirmationVariant, InfoVariant, OptionsVariant, QuestionVariant},
+    sort_entries::SORT_ENTRIES,
     window::{Drawable, Focusable},
 };
 
@@ -22,50 +28,24 @@ pub struct FileExplorer {
     pub selected_index: usize,
     pub entries: Vec<PathBuf>,
     pub list_state: RefCell<ListState>,
-    is_focused: bool,
     interactive: bool,
-    modal: Modal,
-    task: ExplorerModalTask,
-    name_filter: String,
     name: &'static str,
-    sort_entries: Vec<SortEntry>,
+
+    modal: Modal,
+    name_filter: String,
     current_sort: usize,
+    is_focused: bool,
+
+    sender: Sender<ExplorerTask>,
+    receiver: Receiver<ExplorerTask>,
 }
 
-enum ExplorerModalTask {
+pub enum ExplorerTask {
     DeleteFile(PathBuf),
-    MoveFile(PathBuf),
-    CreateFile,
-    Filter,
-    Noop,
-}
-
-struct SortEntry {
-    name: String,
-    func: fn(&mut Vec<PathBuf>) -> Result<bool>,
-}
-
-fn sort_by_name(entries: &mut Vec<PathBuf>) -> Result<bool> {
-    entries.sort();
-    Ok(true)
-}
-
-fn sort_by_size(entries: &mut Vec<PathBuf>) -> Result<bool> {
-    entries.sort_by(|a, b| {
-        let a_size = fs::metadata(a).unwrap().len();
-        let b_size = fs::metadata(b).unwrap().len();
-        b_size.cmp(&a_size)
-    });
-    Ok(true)
-}
-
-fn sort_by_modified_date(entries: &mut Vec<PathBuf>) -> Result<bool> {
-    entries.sort_by(|a, b| {
-        let a_time = fs::metadata(a).unwrap().modified().unwrap();
-        let b_time = fs::metadata(b).unwrap().modified().unwrap();
-        b_time.cmp(&a_time)
-    });
-    Ok(true)
+    MoveFile(PathBuf, String),
+    CreateFile(String),
+    Sort(usize),
+    Filter(String),
 }
 
 impl FileExplorer {
@@ -74,6 +54,11 @@ impl FileExplorer {
         let entries = read_dir_entries(&current_dir)?;
         let list_state = RefCell::new(ListState::default());
         list_state.borrow_mut().select(Some(0));
+
+        let (sender, receiver) = channel();
+
+        let mut modal = Modal::new(Box::new(InfoVariant::new(String::new())));
+        modal.close();
         Ok(Self {
             current_dir,
             selected_index: 0,
@@ -81,23 +66,10 @@ impl FileExplorer {
             list_state,
             is_focused: false,
             interactive,
-            task: ExplorerModalTask::Noop,
-            modal: Modal::new(),
             name_filter: String::new(),
-            sort_entries: vec![
-                SortEntry {
-                    name: String::from("Name"),
-                    func: sort_by_name,
-                },
-                SortEntry {
-                    name: String::from("Size"),
-                    func: sort_by_size,
-                },
-                SortEntry {
-                    name: String::from("Modified"),
-                    func: sort_by_modified_date,
-                },
-            ],
+            modal,
+            sender,
+            receiver,
             current_sort: 0,
             name,
         })
@@ -120,67 +92,85 @@ impl FileExplorer {
                 .borrow_mut()
                 .select(Some(self.selected_index));
         }
+
         Ok(true)
     }
 
-    pub fn delete_current_file(&mut self, _: KeyCode) -> Result<bool> {
+    pub fn prompt_for_delete_current_file(&mut self, _: KeyCode) -> Result<bool> {
         if let Ok(selected_file) = self.get_selected_file() {
-            self.modal.open(
+            let sender = self.sender.clone();
+            self.modal = Modal::new(Box::new(ConfirmationVariant::new(
                 format!("Delete file: {}?", selected_file.to_str().unwrap()),
-                ModalVariant::Confirmation,
-            );
-            self.task = ExplorerModalTask::DeleteFile(selected_file);
+                Box::new(move |_| {
+                    sender
+                        .send(ExplorerTask::DeleteFile(selected_file.clone()))
+                        .unwrap();
+                }),
+            )));
         } else {
-            self.modal
-                .open("Selected file is invalid".to_string(), ModalVariant::Error)
+            self.open_info_modal("Selected file is invalid".to_string());
         }
         Ok(true)
     }
 
-    pub fn move_current_file(&mut self, _: KeyCode) -> Result<bool> {
+    pub fn prompt_for_move_file(&mut self, _: KeyCode) -> Result<bool> {
         if let Ok(selected_file) = self.get_selected_file() {
-            self.modal.open(
+            let sender = self.sender.clone();
+            self.modal = Modal::new(Box::new(QuestionVariant::new(
                 format!("Move file: {} to?", selected_file.to_str().unwrap()),
-                ModalVariant::Question(selected_file.to_str().unwrap().to_string()),
-            );
-            self.task = ExplorerModalTask::MoveFile(selected_file);
+                String::from(selected_file.to_str().unwrap()),
+                Box::new(move |answer| {
+                    // Add 'move' keyword here
+                    sender
+                        .send(ExplorerTask::MoveFile(selected_file.clone(), answer))
+                        .unwrap();
+                }),
+            )));
         } else {
-            self.modal
-                .open("Selected file is invalid".to_string(), ModalVariant::Error)
+            self.open_info_modal("Selected file is invalid".to_string())
         }
         Ok(true)
     }
 
-    pub fn sort_entries(&mut self, _: KeyCode) -> Result<bool> {
-        self.modal.open(
+    pub fn prompt_for_sorting_criterion(&mut self, _: KeyCode) -> Result<bool> {
+        let sender = self.sender.clone();
+        self.modal = Modal::new(Box::new(OptionsVariant::new(
             "Sort by: ".to_string(),
-            ModalVariant::Options(
-                self.sort_entries
-                    .iter()
-                    .map(|entry| entry.name.clone())
-                    .collect(),
-                0,
-            ),
-        );
+            SORT_ENTRIES
+                .iter()
+                .map(|entry| entry.name.to_string())
+                .collect(),
+            Box::new(move |index| {
+                sender.send(ExplorerTask::Sort(index)).unwrap();
+            }),
+        )));
 
         Ok(true)
     }
 
-    pub fn create_file(&mut self, _: KeyCode) -> Result<bool> {
-        self.modal.open(
-            "Create file: ".to_string(),
-            ModalVariant::Question(String::new()),
-        );
-        self.task = ExplorerModalTask::CreateFile;
+    pub fn prompt_for_new_file(&mut self, _: KeyCode) -> Result<bool> {
+        let sender = self.sender.clone();
+        self.modal = Modal::new(Box::new(QuestionVariant::new(
+            String::from("Create file:"),
+            String::new(),
+            Box::new(move |answer| {
+                sender.send(ExplorerTask::CreateFile(answer)).unwrap();
+            }),
+        )));
+
         Ok(true)
     }
 
-    pub fn filter(&mut self, _: KeyCode) -> Result<bool> {
-        self.modal.open(
-            String::from("Search: "),
-            ModalVariant::Question(String::new()),
-        );
-        self.task = ExplorerModalTask::Filter;
+    pub fn prompt_for_new_filter(&mut self, _: KeyCode) -> Result<bool> {
+        let sender = self.sender.clone();
+        self.modal = Modal::new(Box::new(QuestionVariant::new(
+            String::from("Filter: "),
+            String::new(),
+            Box::new(move |answer| {
+                sender.send(ExplorerTask::Filter(answer)).unwrap();
+            }),
+        )));
+
         Ok(true)
     }
 
@@ -189,6 +179,10 @@ impl FileExplorer {
             self.set_path(parent.to_path_buf())?;
         }
         Ok(true)
+    }
+
+    fn open_info_modal(&mut self, message: String) {
+        self.modal = Modal::new(Box::new(InfoVariant::new(message)));
     }
 
     pub fn get_selected_file(&self) -> Result<PathBuf> {
@@ -218,83 +212,58 @@ impl FileExplorer {
             })
             .collect();
 
-        (self.sort_entries[self.current_sort].func)(&mut self.entries)?;
-
+        (SORT_ENTRIES[self.current_sort].func)(&mut self.entries)?;
         self.list_state.borrow_mut().select(Some(0));
         self.selected_index = 0;
-        self.modal.is_open = false;
+        self.modal.close();
         Ok(())
     }
 
-    fn handle_modal_tasks(&mut self) -> Result<()> {
-        match self.modal.status {
-            ModalStatus::Refused => self.modal.close(),
-            ModalStatus::Confirmed => match self.modal.variant {
-                ModalVariant::Confirmation => match &self.task {
-                    ExplorerModalTask::DeleteFile(file) => {
-                        let removal = || {
-                            if file.is_dir() {
-                                fs::remove_dir_all(file)
-                            } else {
-                                fs::remove_file(file)
-                            }
-                        };
-                        if let Err(e) = removal() {
-                            self.modal
-                                .open(format!("Could not delete: {}", e), ModalVariant::Error)
-                        } else {
-                            self.refresh()?;
-                        }
-                    }
-                    &_ => {}
-                },
-                ModalVariant::Info | ModalVariant::Error => self.modal.close(),
-                ModalVariant::Question(ref answer) => match &self.task {
-                    ExplorerModalTask::MoveFile(file) => {
-                        let newpath = PathBuf::from(answer);
-                        if let Err(e) = fs::rename(file, &newpath) {
-                            self.modal
-                                .open(format!("Could not move file: {}", e), ModalVariant::Error)
-                        } else {
-                            self.refresh()?;
-                        }
-                    }
-                    ExplorerModalTask::Filter => {
-                        self.name_filter = answer.clone();
-                        self.refresh()?;
-                    }
-                    ExplorerModalTask::CreateFile => {
-                        let new_file = self.current_dir.join(answer);
-                        if new_file.exists() {
-                            self.modal
-                                .open("File already exists".to_string(), ModalVariant::Error);
-                        } else {
-                            fs::File::create(&new_file)?;
-                            self.refresh()?;
-                        }
-                    }
-                    _ => {}
-                },
-                ModalVariant::Options(_, index) => {
-                    if index < self.sort_entries.len() {
-                        self.current_sort = index;
-                        self.refresh()?;
+    fn dispatch_on_task(&mut self, task: ExplorerTask) -> Result<()> {
+        Ok(match task {
+            ExplorerTask::CreateFile(name) => {
+                let new_file = self.current_dir.join(name);
+                fs::File::create(&new_file)?;
+                self.refresh()?;
+            }
+            ExplorerTask::DeleteFile(filepath) => {
+                let removal = || {
+                    if filepath.is_dir() {
+                        fs::remove_dir_all(filepath)
                     } else {
-                        self.modal
-                            .open("Invalid option".to_string(), ModalVariant::Error);
+                        fs::remove_file(filepath)
                     }
-                }
-            },
-            _ => {}
-        }
+                };
 
-        Ok(())
+                if let Err(e) = removal() {
+                    self.open_info_modal(format!("Could not delete: {}", e));
+                } else {
+                    self.refresh()?;
+                }
+            }
+            ExplorerTask::MoveFile(original, new_path) => {
+                let newpath = PathBuf::from(new_path);
+                if let Err(e) = fs::rename(original, &newpath) {
+                    self.open_info_modal(format!("Could not move file: {}", e));
+                } else {
+                    self.refresh()?;
+                }
+            }
+            ExplorerTask::Sort(entry_index) => {
+                self.current_sort = entry_index;
+                self.refresh()?;
+            }
+            ExplorerTask::Filter(search) => {
+                self.name_filter = search;
+                self.refresh()?;
+            }
+        })
     }
 }
 
 impl Drawable for FileExplorer {
     fn draw(&self, f: &mut Frame, area: Rect) {
-        if self.modal.is_open {
+        if self.modal.is_open() {
             self.modal.draw(f, area);
             return;
         }
@@ -347,12 +316,14 @@ impl Focusable for FileExplorer {
 
 impl InputHandler for FileExplorer {
     fn handle_input(&mut self, key_code: KeyCode) -> Result<bool> {
-        if self.modal.is_open {
+        if self.modal.is_open() {
             self.modal.handle_input(key_code);
-            self.handle_modal_tasks()?;
+            if let Ok(task) = self.receiver.try_recv() {
+                self.dispatch_on_task(task)?;
+            }
             return Ok(true);
         } else {
-            self.handle_command(key_code)
+            return Ok(self.handle_command(key_code)?);
         }
     }
 }
@@ -411,27 +382,27 @@ impl CommandHandler for FileExplorer {
                 Command {
                     id: "explorer.delete_current_file",
                     name: "Delete file",
-                    func: FileExplorer::delete_current_file,
+                    func: FileExplorer::prompt_for_delete_current_file,
                 },
                 Command {
                     id: "explorer.move_current_file",
                     name: "Move file",
-                    func: FileExplorer::move_current_file,
+                    func: FileExplorer::prompt_for_move_file,
                 },
                 Command {
                     id: "explorer.sort_entries",
                     name: "Sort",
-                    func: FileExplorer::sort_entries,
+                    func: FileExplorer::prompt_for_sorting_criterion,
                 },
                 Command {
                     id: "explorer.create_file",
                     name: "New file",
-                    func: FileExplorer::create_file,
+                    func: FileExplorer::prompt_for_new_file,
                 },
                 Command {
                     id: "explorer.filter",
                     name: "Filter",
-                    func: FileExplorer::filter,
+                    func: FileExplorer::prompt_for_new_filter,
                 },
             ]
         }

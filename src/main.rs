@@ -2,9 +2,11 @@ mod app;
 mod binding;
 mod command;
 mod editor;
-mod explorer_modal;
 mod file_explorer;
 mod legend;
+mod modal;
+mod modal_variants;
+mod sort_entries;
 mod text_editor;
 mod window;
 
