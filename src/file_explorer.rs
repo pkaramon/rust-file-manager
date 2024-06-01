@@ -1,10 +1,11 @@
 use anyhow::{Context, Result};
+use byte_unit::Byte;
 use crossterm::event::KeyCode;
 use ratatui::{
-    layout::Rect,
+    layout::{Constraint, Rect},
     style::{Color, Style},
     text::Span,
-    widgets::{Block, Borders, List, ListItem, ListState},
+    widgets::{Block, Borders, Row, Table, TableState},
     Frame,
 };
 use std::path::PathBuf;
@@ -27,7 +28,7 @@ pub struct FileExplorer {
     pub current_dir: PathBuf,
     pub selected_index: usize,
     pub entries: Vec<PathBuf>,
-    pub list_state: RefCell<ListState>,
+    pub table_state: RefCell<TableState>,
     interactive: bool,
     name: &'static str,
 
@@ -52,7 +53,7 @@ impl FileExplorer {
     pub fn new(name: &'static str, interactive: bool) -> Result<Self> {
         let current_dir = std::env::current_dir().unwrap();
         let entries = read_dir_entries(&current_dir)?;
-        let list_state = RefCell::new(ListState::default());
+        let list_state = RefCell::new(TableState::default());
         list_state.borrow_mut().select(Some(0));
 
         let (sender, receiver) = channel();
@@ -63,7 +64,7 @@ impl FileExplorer {
             current_dir,
             selected_index: 0,
             entries,
-            list_state,
+            table_state: list_state,
             is_focused: false,
             interactive,
             name_filter: String::new(),
@@ -78,7 +79,7 @@ impl FileExplorer {
     pub fn select_previous(&mut self, _: KeyCode) -> bool {
         if !self.entries.is_empty() && self.selected_index > 0 {
             self.selected_index -= 1;
-            self.list_state
+            self.table_state
                 .borrow_mut()
                 .select(Some(self.selected_index));
         }
@@ -88,7 +89,7 @@ impl FileExplorer {
     pub fn select_next(&mut self, _: KeyCode) -> bool {
         if !self.entries.is_empty() && self.selected_index < self.entries.len() - 1 {
             self.selected_index += 1;
-            self.list_state
+            self.table_state
                 .borrow_mut()
                 .select(Some(self.selected_index));
         }
@@ -208,7 +209,7 @@ impl FileExplorer {
             .collect();
 
         (SORT_ENTRIES[self.current_sort].func)(&mut self.entries)?;
-        self.list_state.borrow_mut().select(Some(0));
+        self.table_state.borrow_mut().select(Some(0));
         self.selected_index = 0;
         self.modal.close();
         Ok(())
@@ -263,12 +264,22 @@ impl Drawable for FileExplorer {
             return;
         }
 
-        let items: Vec<ListItem> = self
+        let file_rows: Vec<Row> = self
             .entries
             .iter()
             .map(|entry| {
                 let name = entry.file_name().unwrap().to_str().unwrap();
-                ListItem::new(Span::from(name))
+                let file_type = if entry.is_dir() { "dir" } else { "file" };
+                let file_metadata = entry.metadata().unwrap();
+                let file_size = file_metadata.len();
+                let readable_size =
+                    Byte::from_u64(file_size).get_appropriate_unit(byte_unit::UnitType::Binary);
+
+                Row::new([
+                    Span::from(file_type).style(Style::default().fg(Color::Green)),
+                    Span::from(format!("{readable_size:.2}")),
+                    Span::from(name),
+                ])
             })
             .collect();
 
@@ -280,16 +291,23 @@ impl Drawable for FileExplorer {
             block = block.border_style(Color::Blue);
         }
 
-        let mut list = List::new(items).block(block);
+        let mut table_state = self.table_state.borrow_mut();
+        let widths = [
+            Constraint::Percentage(10),
+            Constraint::Percentage(20),
+            Constraint::Percentage(70),
+        ];
+        let mut table = Table::new(file_rows, widths)
+            .block(block)
+            .header(Row::new(vec!["Type", "Size", "Name"]));
 
         if self.is_focused {
-            list = list
-                .highlight_style(Style::default().bg(Color::Blue))
-                .highlight_symbol(">> ");
+            table = table
+                .highlight_symbol(">>")
+                .highlight_style(Style::default().bg(Color::Blue));
         }
 
-        let mut list_state = self.list_state.borrow_mut();
-        f.render_stateful_widget(list, area, &mut *list_state);
+        f.render_stateful_widget(table, area, &mut table_state);
     }
 }
 
@@ -328,7 +346,7 @@ impl Editor for FileExplorer {
         self.entries = read_dir_entries(&new_dir)?;
         self.current_dir = new_dir;
         self.selected_index = 0;
-        self.list_state
+        self.table_state
             .borrow_mut()
             .select(Some(self.selected_index));
         Ok(())
