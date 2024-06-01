@@ -1,3 +1,5 @@
+use std::{cell::RefCell, time::SystemTime};
+
 use crossterm::event::KeyCode;
 use ratatui::{
     layout::Rect,
@@ -12,8 +14,16 @@ use crate::{
     window::Drawable,
 };
 
+#[derive(Clone)]
+struct AnimationData {
+    time: SystemTime,
+    dir: bool,
+    scroll_pos: u16,
+}
+
 pub struct Legend {
     command_bindings_string: String,
+    anim: RefCell<AnimationData>,
 }
 
 struct CommandBinding<'a> {
@@ -25,6 +35,11 @@ impl Legend {
     pub fn new() -> Self {
         Legend {
             command_bindings_string: String::new(),
+            anim: RefCell::new(AnimationData {
+                time: SystemTime::now(),
+                dir: false,
+                scroll_pos: 0,
+            }),
         }
     }
 
@@ -53,15 +68,67 @@ impl Legend {
             .collect();
 
         self.command_bindings_string = string_vec.join("  ");
+        self.command_bindings_string.insert(0, ' ');
+        self.command_bindings_string.push(' ');
+    }
+
+    fn calc_anim_data(&self, area: Rect) {
+        let x_margin = 2u16;
+
+        let legend_width = self.command_bindings_string.len() as u16 + x_margin;
+
+        if legend_width <= area.width {
+            self.anim.replace(AnimationData {
+                time: SystemTime::now(),
+                dir: false,
+                scroll_pos: 0,
+            });
+            return;
+        }
+        let anim = self.anim.clone().into_inner();
+        let now = SystemTime::now();
+        let scroll_pos = anim.scroll_pos;
+
+        if let Ok(diff) = now.duration_since(anim.time) {
+            if diff.as_millis() < 250 {
+                return;
+            }
+        } else {
+            return;
+        }
+
+        let (new_dir, new_scroll_pos) = if !anim.dir {
+            if scroll_pos + area.width < legend_width {
+                (false, scroll_pos + 1)
+            } else {
+                (true, scroll_pos - 1)
+            }
+        } else {
+            if scroll_pos == 0 {
+                (false, scroll_pos + 1)
+            } else {
+                (true, scroll_pos - 1)
+            }
+        };
+
+        self.anim.replace(AnimationData {
+            time: SystemTime::now(),
+            dir: new_dir,
+            scroll_pos: new_scroll_pos,
+        });
     }
 }
 
 impl Drawable for Legend {
     fn draw(&self, f: &mut Frame, area: Rect) {
         let line = Line::from(self.command_bindings_string.clone());
+
+        self.calc_anim_data(area);
+
         let p = Paragraph::new(line)
             .block(Block::bordered())
-            .style(Style::new().white().on_black());
+            .style(Style::new().white().on_black())
+            .scroll((0, self.anim.borrow().scroll_pos));
 
         f.render_widget(p, area);
     }
