@@ -270,16 +270,23 @@ impl Drawable for FileExplorer {
             .map(|entry| {
                 let name = entry.file_name().unwrap().to_str().unwrap();
                 let file_type = if entry.is_dir() { "dir" } else { "file" };
-                let file_metadata = entry.metadata().unwrap();
-                let file_size = file_metadata.len();
-                let readable_size =
-                    Byte::from_u64(file_size).get_appropriate_unit(byte_unit::UnitType::Binary);
+                if let Ok(file_metadata) = entry.metadata() {
+                    let file_size = file_metadata.len();
+                    let readable_size =
+                        Byte::from_u64(file_size).get_appropriate_unit(byte_unit::UnitType::Binary);
 
-                Row::new([
-                    Span::from(file_type).style(Style::default().fg(Color::Green)),
-                    Span::from(format!("{readable_size:.2}")),
-                    Span::from(name),
-                ])
+                    Row::new([
+                        Span::from(file_type).style(Style::default().fg(Color::Green)),
+                        Span::from(format!("{readable_size:.2}")),
+                        Span::from(name),
+                    ])
+                } else {
+                    Row::new([
+                        Span::from(file_type).style(Style::default().fg(Color::Green)),
+                        Span::from("?"),
+                        Span::from(name),
+                    ])
+                }
             })
             .collect();
 
