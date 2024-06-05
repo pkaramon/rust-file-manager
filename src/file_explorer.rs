@@ -204,22 +204,37 @@ impl FileExplorer {
             .map(|entry| entry.clone())
             .filter(|entry| {
                 let name = entry.file_name().unwrap().to_str().unwrap();
-                name.contains(&self.name_filter)
+                name.to_lowercase()
+                    .contains(&self.name_filter.to_lowercase())
             })
             .collect();
 
         (SORT_ENTRIES[self.current_sort].func)(&mut self.entries)?;
         self.table_state.borrow_mut().select(Some(0));
         self.selected_index = 0;
-        self.modal.close();
         Ok(())
     }
 
     fn dispatch_on_task(&mut self, task: ExplorerTask) -> Result<()> {
         Ok(match task {
             ExplorerTask::CreateFile(name) => {
-                let new_file = self.current_dir.join(name);
-                fs::File::create(&new_file)?;
+                let new_file = self.current_dir.join(&name);
+                if new_file.try_exists().unwrap_or(false) {
+                    self.open_info_modal("File already exists".to_string());
+                } else {
+                    let create = || -> Result<()> {
+                        if name.ends_with("/") {
+                            Ok(fs::create_dir(new_file)?)
+                        } else {
+                            fs::File::create(&new_file)?;
+                            Ok(())
+                        }
+                    };
+                    match create() {
+                        Ok(_) => {}
+                        Err(_) => self.open_info_modal("Could not create the file".to_string()),
+                    }
+                }
                 self.refresh()?;
             }
             ExplorerTask::DeleteFile(filepath) => {
@@ -353,6 +368,8 @@ impl Editor for FileExplorer {
         self.entries = read_dir_entries(&new_dir)?;
         self.current_dir = new_dir;
         self.selected_index = 0;
+        self.name_filter = String::new();
+        self.current_sort = 0;
         self.table_state
             .borrow_mut()
             .select(Some(self.selected_index));
